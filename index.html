@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票分析系統 — 你的投資策略 AI 幫手 v0.3.6</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>H</text></svg>">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- 引入 Chart.js 作為 AI 診斷的圖表引擎 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* ================= 設計系統規範 ================= */
+        :root {
+            --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px;
+            --radius-btn: 8px; --radius-card: 12px; --radius-pill: 9999px;
+
+            --bg-body: #F5F7FA; --bg-header: #FFFFFF; --bg-card: #FFFFFF; --bg-summary: #F8FAFC;
+            --text-main: #333333; --text-secondary: #666666; --text-muted: #999999;
+            --border-color: #E0E0E0; --border-btn: #DBEAFE;
+            
+            --primary-color: #4A90E2; --info-color: #4FC3F7;       
+            --trade-up-buy: #EF4444; --trade-down-sell: #10B981;  
+            --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --transition: all 0.2s ease;
+        }
+
+        html.dark {
+            --bg-body: #0F172A; --bg-header: #1E293B; --bg-card: #1E293B; --bg-summary: #0B1120;
+            --text-main: #FFFFFF; --text-secondary: #CBD5E1; --text-muted: #64748b;
+            --border-color: rgba(255, 255, 255, 0.15); --border-btn: rgba(255, 255, 255, 0.2);
+            --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        html, body { overscroll-behavior-y: none; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; font-size: 16px; line-height: 1.6; background-color: var(--bg-body); color: var(--text-main); transition: var(--transition); }
+
+        .text-heading { font-size: 20px; line-height: 1.3; font-weight: 700; }
+        .text-subheading { font-size: 18px; line-height: 1.4; font-weight: 500; }
+        .text-caption { font-size: 14px; line-height: 1.5; color: var(--text-secondary); }
+
+        /* Header 排版優化 */
+        .header { background-color: var(--bg-header); border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 50; width: 100%; }
+        .header-inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 16px var(--space-lg); width: 100%; }
+        
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .logo-box { background: linear-gradient(135deg, #6B8DD6, #8E37D7); border-radius: 12px; width: 42px; height: 42px; display: flex; justify-content: center; align-items: center; color: white; font-size: 24px; font-weight: bold; font-family: 'Inter'; }
+        .logo-text { display: flex; flex-direction: column; }
+        .logo-title { font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 8px; line-height: 1.2;}
+        .version-badge { background: rgba(255,255,255,0.1); border: 1px solid var(--border-color); font-size: 13px; padding: 2px 8px; border-radius: 12px; font-family: 'JetBrains Mono', monospace; font-weight: 500;}
+        .logo-subtitle { font-size: 14px; color: var(--text-secondary); margin-top: 2px; }
+
+        .header-center { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1; margin-left: 32px; }
+        .market-status-box { display: flex; align-items: center; gap: 12px; background: rgba(128,128,128,0.05); padding: 6px 16px; border-radius: var(--radius-pill); border: 1px solid var(--border-color); font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+        .status-dot.active { background-color: var(--trade-up-buy); box-shadow: 0 0 8px var(--trade-up-buy); animation: blink 2s infinite; }
+        .status-dot.closed { background-color: var(--text-muted); }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+        .regime-badge { font-size: 12px; padding: 2px 8px; border-radius: 12px; font-family: 'Noto Sans TC'; font-weight: 700; display: inline-block; }
+        .regime-bull { background: rgba(239, 68, 68, 0.15); color: var(--trade-up-buy); }
+        .regime-bear { background: rgba(16, 185, 129, 0.15); color: var(--trade-down-sell); border: 1px solid var(--trade-down-sell); }
+
+        .fear-greed-meter { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+        .meter-bar { width: 100px; height: 6px; background: linear-gradient(to right, #10B981, #FBBF24, #EF4444); border-radius: 3px; position: relative; }
+        .meter-indicator { position: absolute; top: -2px; width: 2px; height: 10px; background: var(--text-main); transition: left 0.5s ease; }
+
+        .header-right { display: flex; align-items: center; gap: var(--space-md); }
+        .btn-pill { display: inline-flex; align-items: center; gap: var(--space-sm); padding: 6px 16px; border-radius: var(--radius-pill); border: 1px solid var(--border-btn); background: var(--bg-card); color: var(--text-main); font-size: 14px; font-weight: 700; cursor: pointer; transition: var(--transition); }
+        .btn-pill:hover .effect-text { text-shadow: 1px 0 1px rgba(239, 68, 68, 0.7), -1px 0 1px rgba(79, 195, 247, 0.7); }
+
+        /* Main */
+        .screener-main { max-width: 1200px; margin: 0 auto; padding: var(--space-lg); }
+        .card { background-color: var(--bg-card); border-radius: var(--radius-card); border: 1px solid var(--border-color); box-shadow: var(--shadow-card); margin-bottom: var(--space-lg); overflow: hidden; }
+        .card-body { padding: var(--space-lg); }
+
+        .top-panels { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg); margin-bottom: var(--space-lg); }
+        @media (max-width: 768px) { .top-panels { grid-template-columns: 1fr; } }
+
+        .btn { padding: 10px var(--space-md); border: none; border-radius: var(--radius-btn); font-weight: 500; font-size: 15px; cursor: pointer; transition: var(--transition); display: inline-flex; align-items: center; justify-content: center; gap: var(--space-sm); }
+        .btn-primary { background: var(--primary-color); color: #FFFFFF; }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-secondary { background: transparent; color: var(--text-main); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background: rgba(128,128,128,0.1); }
+        .btn-sm { padding: 6px 12px; font-size: 13px; }
+        
+        .input-control { background: rgba(128,128,128,0.05); border: 1px solid var(--border-color); color: var(--text-main); padding: 10px var(--space-md); border-radius: var(--radius-btn); font-family: inherit; font-size: 14px; outline: none; transition: var(--transition); flex: 1; }
+        .input-control:focus { border-color: var(--primary-color); }
+        select.input-control option { background-color: var(--bg-card); color: var(--text-main); } 
+
+        .custom-stock-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; background: rgba(74, 144, 226, 0.1); color: var(--primary-color); border: 1px solid var(--primary-color); border-radius: var(--radius-pill); font-size: 14px; font-weight: 500; }
+        .custom-stock-tag button { background: none; border: none; color: inherit; cursor: pointer; font-size: 12px; }
+
+        .screener-tabs { display: flex; border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.02); }
+        html.dark .screener-tabs { background: rgba(255,255,255,0.02); }
+        .screener-tab { flex: 1; padding: var(--space-md); background: transparent; border: none; color: var(--text-secondary); font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; transition: var(--transition); font-size: 16px; }
+        .screener-tab.active { color: var(--primary-color); border-bottom-color: var(--primary-color); background: rgba(74,144,226,0.05);}
+        
+        .section-title { font-size: 16px; font-weight: 700; margin-bottom: var(--space-md); color: var(--text-main); display: flex; align-items: center; gap: 4px; }
+        
+        .tooltip-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--border-color); color: var(--text-secondary); font-size: 10px; cursor: help; position: relative; }
+        .tooltip-icon:hover::after { content: attr(data-tooltip); position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: var(--bg-header); border: 1px solid var(--border-color); color: var(--text-main); padding: 8px; border-radius: 4px; font-size: 12px; white-space: normal; width: 220px; box-shadow: var(--shadow-card); z-index: 10; font-weight: normal; }
+
+        .filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-md); margin-bottom: var(--space-xl); }
+        .filter-chip { display: flex; flex-direction: column; justify-content: center; padding: var(--space-md); border: 1px solid var(--border-color); border-radius: var(--radius-btn); cursor: pointer; transition: var(--transition); background-color: transparent; position: relative; min-height: 80px; }
+        .filter-chip:hover { border-color: var(--primary-color); background: rgba(74, 144, 226, 0.05); }
+        .filter-chip input { position: absolute; opacity: 0; cursor: pointer; height: 0; width: 0; }
+        .filter-chip:has(input:checked) { border-color: var(--primary-color); background: rgba(74, 144, 226, 0.1); }
+
+        .chip-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+        .chip-label { font-weight: 700; font-size: 15px; color: var(--text-main); }
+        .chip-desc { display: block; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+        
+        .badge-type { font-size: 12px; padding: 2px 6px; border-radius: 4px; font-weight: 500; white-space: nowrap;}
+        .badge-buy { background: rgba(239, 68, 68, 0.15); color: var(--trade-up-buy); } 
+        .badge-sell { background: rgba(16, 185, 129, 0.15); color: var(--trade-down-sell); } 
+        .badge-info { background: rgba(79, 195, 247, 0.15); color: var(--info-color); }
+
+        .advanced-header { display: flex; justify-content: space-between; align-items: center; padding: var(--space-md) 0; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); margin-bottom: var(--space-md); cursor: pointer; }
+        .advanced-group { margin-bottom: var(--space-lg); }
+        .action-bar { display: flex; align-items: center; justify-content: space-between; margin-top: var(--space-xl); padding-top: var(--space-md); border-top: 1px solid var(--border-color); }
+        
+        .scan-conn-status { font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; margin-left: var(--space-md); }
+        .conn-indicator { width: 8px; height: 8px; border-radius: 50%; }
+        .conn-loading { background: var(--warning-color); animation: blink 1s infinite; }
+        .conn-success { background: var(--info-color); }
+        .conn-failed { background: var(--trade-down-sell); }
+
+        .summary-box { background: var(--bg-summary); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: var(--space-md) var(--space-lg); margin: var(--space-lg); display: flex; justify-content: space-between; align-items: flex-start; }
+        .summary-content { line-height: 1.8; color: var(--text-secondary); font-size: 14px; }
+        .summary-content strong { color: var(--text-main); font-weight: 600; }
+
+        .table-wrapper { overflow-x: auto; }
+        .data-table { width: 100%; border-collapse: collapse; text-align: left; white-space: nowrap; }
+        .data-table th, .data-table td { padding: var(--space-md) var(--space-md); border-bottom: 1px solid var(--border-color); }
+        .data-table th { font-weight: 500; color: var(--text-secondary); font-size: 13px; border-bottom: 2px solid var(--border-color); }
+        .data-table tbody tr:hover { background-color: rgba(74, 144, 226, 0.05); }
+        .font-mono { font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+        .text-up { color: var(--trade-up-buy); font-weight: 500; } 
+        .text-down { color: var(--trade-down-sell); font-weight: 500; } 
+
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: var(--transition); z-index: 100; }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal-content { background: var(--bg-card); width: 90%; max-width: 800px; border-radius: var(--radius-card); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); max-height: 85vh; }
+        .modal-header { padding: var(--space-lg); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.02); }
+        .modal-body { padding: var(--space-lg); overflow-y: auto; flex: 1; }
+        .modal-close { background: transparent; border: none; font-size: 24px; color: var(--text-secondary); cursor: pointer; }
+
+        /* 熱力圖 Grid */
+        .heatmap-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+        .heatmap-item { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 12px 8px; border-radius: 8px; color: white; font-weight: bold; text-align: center; }
+        .heatmap-item.up-strong { background-color: #B91C1C; }
+        .heatmap-item.up-light { background-color: #EF4444; }
+        .heatmap-item.neutral { background-color: #6B7280; }
+        .heatmap-item.down-light { background-color: #10B981; }
+        .heatmap-item.down-strong { background-color: #047857; }
+        .heatmap-symbol { font-size: 14px; margin-bottom: 4px; }
+        .heatmap-change { font-family: 'JetBrains Mono'; font-size: 12px; }
+
+        .footer { text-align: center; padding: var(--space-lg); color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+        .footer a { color: var(--primary-color); text-decoration: none; }
+        .flex-row { display: flex; align-items: center; gap: var(--space-sm); }
+        .hidden { display: none !important; }
+        
+        .btn-diag { background: rgba(74, 144, 226, 0.1); color: var(--primary-color); border: 1px solid var(--primary-color); padding: 2px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-top: 6px; display: inline-block; font-weight: bold; transition: all 0.2s;}
+        .btn-diag:hover { background: var(--primary-color); color: white; }
+
+        /* AI 診斷圖表容器 */
+        .chart-container { position: relative; height: 250px; width: 100%; margin-top: 12px; margin-bottom: 12px;}
+
+        /* ================= 響應式設計優化 (Mobile) ================= */
+        @media (max-width: 992px) {
+            .header-inner { flex-wrap: wrap; padding: 12px var(--space-md); }
+            /* 讓大盤狀態區塊折行到下方 */
+            .header-center { order: 3; flex: 0 0 100%; margin-left: 0 !important; margin-top: 16px; align-items: center !important; }
+            .header-right { margin-left: auto; }
+            
+            /* 大盤狀態列排版保護 */
+            .market-status-box { flex-wrap: wrap; justify-content: center; padding: 8px; text-align: center; height: auto; line-height: 2; width: 100%; }
+            .market-status-box > span { border-left: none !important; border-right: none !important; padding: 0 6px !important; display: inline-block; white-space: nowrap; }
+            
+            /* 情緒溫度計與濾網徽章折行 */
+            .header-center > div:nth-child(2) { flex-wrap: wrap; justify-content: center; margin-left: 0 !important; gap: 12px !important; margin-top: 8px; width: 100%; }
+            
+            /* 頂部快速診斷區塊優化 */
+            .quick-check-container { flex-direction: column !important; align-items: flex-start !important; }
+            .quick-check-wrapper { width: 100%; min-width: 100% !important; flex-wrap: wrap; }
+            #quickCheckInput { max-width: 100% !important; flex: 1 1 100%; }
+            #btnQuickCheck { flex: 1 1 100%; }
+            #quickCheckStatus { margin-left: 0 !important; width: 100%; text-align: left; margin-top: 8px; }
+            
+            /* 中間表單與按鈕列優化 */
+            .action-bar { flex-direction: column; gap: 16px; align-items: stretch; }
+            .action-bar .flex-row { justify-content: center; flex-wrap: wrap; width: 100%; }
+            .action-bar .btn { flex: 1; }
+            
+            .top-panels { grid-template-columns: 1fr; gap: var(--space-md); }
+            .advanced-group .flex-row { flex-wrap: wrap; gap: 8px; }
+            .advanced-group .input-control { flex: 1 1 100%; }
+            .advanced-group .btn { flex: 1 1 auto; justify-content: center; }
+            
+            /* 彈窗Modal保護 */
+            .modal-header { flex-direction: column; align-items: flex-start !important; position: relative; padding-right: 48px; gap: 12px;}
+            #aiDiagScoreBadge { margin-left: 0 !important; width: 100%; }
+            .modal-close { position: absolute; right: 16px; top: 16px; }
+            .modal-body { padding: var(--space-md); }
+        }
+
+        @media (max-width: 480px) {
+            .logo-title { font-size: 20px; }
+            .screener-tab { padding: 12px 8px; font-size: 14px; }
+            .filter-grid { grid-template-columns: 1fr; }
+            .action-bar .flex-row .btn-sm { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <div class="header-left">
+                <div class="logo-box">H</div>
+                <div class="logo-text">
+                    <div class="logo-title">股票分析系統 <span class="version-badge">v0.3.6</span></div>
+                    <div class="logo-subtitle">你的投資策略 AI 幫手</div>
+                </div>
+            </div>
+            <div class="header-center">
+                <!-- 大盤指數與日期 -->
+                <div class="market-status-box" id="marketStatusBox">
+                    <span id="marketDate" style="color:var(--text-secondary); border-right: 1px solid var(--border-color); padding-right: 12px;">📅 讀取中</span>
+                    <span>加權指數</span>
+                    <span class="text-up" id="marketIndexVal">讀取中...</span>
+                    <span style="border-left: 1px solid var(--border-color); padding-left: 12px;" id="marketOpenStatus">
+                        <span class="status-dot closed"></span> <span style="font-family:'Noto Sans TC';">連線中</span>
+                    </span>
+                </div>
+                <!-- 情緒溫度計與濾網觸發 -->
+                <div style="display: flex; align-items: center; gap: 16px; margin-left: 8px;">
+                    <div class="fear-greed-meter" id="fearGreedMeter" style="display:none;">
+                        <span>情緒溫度：</span>
+                        <div class="meter-bar">
+                            <div class="meter-indicator" id="meterIndicator" style="left: 50%;"></div>
+                        </div>
+                        <span id="meterText">中性</span>
+                    </div>
+                    <span id="marketRegimeBadge" class="regime-badge" style="display: none;"></span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button id="btnHelp" class="btn-pill" title="新手教學與說明" onclick="openModal('helpModal')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    <span class="effect-text">說明</span>
+                </button>
+                <button id="themeToggle" class="btn-pill" title="切換顯示模式">
+                    <span id="themeIcon" style="color: #FCD34D; font-size: 16px;">☀️</span> 
+                    <span id="themeText" class="effect-text">亮色</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="screener-main">
+        <div class="card">
+            <div class="screener-tabs">
+                <button class="screener-tab active" data-market="tw">🇹🇼 台股篩選</button>
+                <button class="screener-tab" data-market="us">🇺🇸 美股篩選</button>
+            </div>
+
+            <div class="card-body">
+                
+                <!-- 新增：單股一鍵健檢專區 -->
+                <div class="card quick-check-container" style="background: linear-gradient(to right, rgba(74,144,226,0.05), rgba(142,55,215,0.05)); border-color: var(--primary-color); margin-bottom: var(--space-lg); display: flex; flex-direction: row; padding: 16px var(--space-lg); align-items: center; flex-wrap: wrap;">
+                    <div style="font-size: 24px; margin-right: 8px;">🩺</div>
+                    <div class="quick-check-wrapper" style="flex: 1; display: flex; align-items: center; gap: 12px; min-width: 300px;">
+                        <span style="font-weight: 700; color: var(--text-main); white-space: nowrap; font-size: 18px;">單股快速健檢</span>
+                        <input type="text" id="quickCheckInput" class="input-control" placeholder="輸入股票代號 (如 2330)" style="max-width: 250px; background: var(--bg-card);">
+                        <button id="btnQuickCheck" class="btn btn-primary" style="padding: 10px 24px; box-shadow: 0 4px 6px -1px rgba(74,144,226,0.3);">立即診斷</button>
+                    </div>
+                    <div id="quickCheckStatus" style="font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-left: auto;"></div>
+                </div>
+
+                <!-- 頂部雙欄對稱排版 (自選股與書籤) -->
+                <div class="top-panels">
+                    <!-- 左欄：自選股票 -->
+                    <div class="advanced-group" style="margin-bottom: 0;">
+                        <div class="section-title" style="margin-bottom: var(--space-sm);">自選股票名單</div>
+                        <div class="flex-row">
+                            <input type="text" id="customStockInput" class="input-control" placeholder="[輸入代號，例如 2330 或 0050]">
+                            <button type="button" id="btnAddCustomStock" class="btn btn-primary" style="padding: 10px 24px;">加入</button>
+                        </div>
+                        <div id="customStockTags" class="flex-row" style="margin-top: 12px; flex-wrap: wrap;"></div>
+                    </div>
+
+                    <!-- 右欄：個人書籤 -->
+                    <div class="advanced-group" style="background: rgba(0,0,0,0.02); padding: var(--space-md); border-radius: var(--radius-card); border: 1px solid var(--border-color); margin-bottom: 0;">
+                        <div class="flex-row" style="justify-content: space-between; margin-bottom: var(--space-sm);">
+                            <h3 class="section-title" style="margin:0;"><span style="color:var(--primary-color)">🔖</span> 個人書籤</h3>
+                            <div style="font-size: 13px;">
+                                <a href="#" id="btnExportBookmarks" style="color:var(--text-secondary); text-decoration:none; margin-right:12px;">匯出 JSON</a>
+                                <label for="importBookmarkFile" style="color:var(--text-secondary); cursor:pointer;">匯入 JSON</label>
+                                <input type="file" id="importBookmarkFile" accept=".json" style="display:none;">
+                            </div>
+                        </div>
+                        <div class="flex-row" style="margin-bottom: 12px;">
+                            <input type="text" id="bookmarkNameInput" class="input-control" placeholder="請輸入名稱">
+                            <button type="button" class="btn btn-secondary" id="btnSaveBookmark" style="white-space: nowrap;">💾 儲存條件</button>
+                        </div>
+                        <div class="flex-row">
+                            <select id="bookmarkSelect" class="input-control" style="flex:1;">
+                                <option value="">-- 選擇書籤 --</option>
+                            </select>
+                            <button type="button" class="btn btn-primary" id="btnLoadBookmark">載入</button>
+                            <button type="button" class="btn btn-secondary" style="color:var(--trade-down-sell); border-color:var(--trade-down-sell); padding: 10px;" id="btnDeleteBookmark" title="刪除選定書籤">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-title" style="margin-bottom: var(--space-sm); margin-top: var(--space-lg);">簡易篩選條件</div>
+
+                <div class="filter-grid" id="basicFilters">
+                    <label class="filter-chip">
+                        <input type="checkbox" value="buySignal">
+                        <div class="chip-header"><span class="chip-label">適合買進 <span class="tooltip-icon" data-tooltip="多因子核心濾網：必須站上月線，且綜合評分大於等於2分，降低假突破風險。">?</span></span><span class="badge-type badge-buy">買入</span></div>
+                        <span class="chip-desc">強制站上月線 + 綜合評分 &ge; 2</span>
+                    </label>
+                    <label class="filter-chip">
+                        <input type="checkbox" value="sellSignal">
+                        <div class="chip-header"><span class="chip-label">考慮賣出 <span class="tooltip-icon" data-tooltip="多因子核心濾網：必須跌破月線，且綜合評分小於等於-2分。">?</span></span><span class="badge-type badge-sell">賣出</span></div>
+                        <span class="chip-desc">強制跌破月線 + 綜合評分 &le; -2</span>
+                    </label>
+                    <label class="filter-chip">
+                        <input type="checkbox" value="volumeSpike">
+                        <div class="chip-header"><span class="chip-label">量能異動 <span class="tooltip-icon" data-tooltip="今日成交量超過過去5天平均的1.5倍，代表有大人顧店或資金湧入。">?</span></span><span class="badge-type badge-info">篩選</span></div>
+                        <span class="chip-desc">今日成交量 > 5日均量 1.5 倍</span>
+                    </label>
+                    <label class="filter-chip">
+                        <input type="checkbox" value="oversold">
+                        <div class="chip-header"><span class="chip-label">超跌反彈 <span class="tooltip-icon" data-tooltip="RSI低於30，代表短線被過度拋售，乖離過大容易出現技術性反彈。">?</span></span><span class="badge-type badge-buy">買入</span></div>
+                        <span class="chip-desc">RSI &lt; 30 (超賣區)</span>
+                    </label>
+                    <label class="filter-chip">
+                        <input type="checkbox" value="foreignBuy">
+                        <div class="chip-header"><span class="chip-label">外資買超 <span class="tooltip-icon" data-tooltip="TWSE 真實籌碼資料：最新交易日外資總買賣超大於零。(注意：僅支援上市股票)">?</span></span><span class="badge-type badge-buy">買入</span></div>
+                        <span class="chip-desc">最新真實籌碼(限上市)</span>
+                    </label>
+                    <label class="filter-chip">
+                        <input type="checkbox" value="foreignSell">
+                        <div class="chip-header"><span class="chip-label">外資賣超 <span class="tooltip-icon" data-tooltip="TWSE 真實籌碼資料：最新交易日外資總買賣超小於零。(注意：僅支援上市股票)">?</span></span><span class="badge-type badge-sell">賣出</span></div>
+                        <span class="chip-desc">最新真實籌碼(限上市)</span>
+                    </label>
+                    <label class="filter-chip">
+                        <input type="checkbox" value="trustBuy">
+                        <div class="chip-header"><span class="chip-label">投信買超 <span class="tooltip-icon" data-tooltip="TWSE 真實籌碼資料：最新交易日投信總買賣超大於零，內資護航。(注意：僅支援上市股票)">?</span></span><span class="badge-type badge-buy">買入</span></div>
+                        <span class="chip-desc">最新真實籌碼(限上市)</span>
+                    </label>
+                    <label class="filter-chip">
+                        <input type="checkbox" value="trustSell">
+                        <div class="chip-header"><span class="chip-label">投信賣超 <span class="tooltip-icon" data-tooltip="TWSE 真實籌碼資料：最新交易日投信總買賣超小於零。(注意：僅支援上市股票)">?</span></span><span class="badge-type badge-sell">賣出</span></div>
+                        <span class="chip-desc">最新真實籌碼(限上市)</span>
+                    </label>
+                </div>
+
+                <div class="advanced-header" onclick="document.getElementById('advFilters').classList.toggle('hidden'); const t = document.getElementById('advToggleText'); t.innerText = t.innerText.includes('展開') ? '收合進階條件 ▲' : '展開進階條件 ▼';">
+                    <h3 class="section-title" style="margin:0;">進階篩選 <span class="text-caption" style="font-weight:normal; margin-left: 8px;">進階篩選條件和簡易篩選條件會一起判斷 (AND)</span></h3>
+                    <span class="text-subheading" id="advToggleText" style="cursor: pointer; color: var(--primary-color);">展開進階條件 ▼</span>
+                </div>
+
+                <div id="advFilters" class="hidden">
+                    <div class="advanced-group">
+                        <div class="flex-row" style="justify-content: space-between; margin-bottom: var(--space-sm);">
+                            <h3 class="section-title" style="margin:0;">趨勢</h3>
+                            <span class="text-caption">均線與布林通道</span>
+                        </div>
+                        <div class="filter-grid" style="margin-bottom: 0;">
+                            <label class="filter-chip">
+                                <input type="checkbox" value="aboveMA20">
+                                <div class="chip-header"><span class="chip-label">站上 MA20 <span class="tooltip-icon" data-tooltip="股價站上20日均線(月線)，代表短期趨勢偏多">?</span></span><span class="badge-type badge-buy">買入</span></div>
+                                <span class="chip-desc">今日收盤價在 20 日均線上方</span>
+                            </label>
+                            <label class="filter-chip">
+                                <input type="checkbox" value="belowMA20">
+                                <div class="chip-header"><span class="chip-label">跌破 MA20 <span class="tooltip-icon" data-tooltip="股價跌破20日均線(月線)，代表短期趨勢偏空">?</span></span><span class="badge-type badge-sell">賣出</span></div>
+                                <span class="chip-desc">今日收盤價在 20 日均線下方</span>
+                            </label>
+                            <label class="filter-chip">
+                                <input type="checkbox" value="bollUp">
+                                <div class="chip-header"><span class="chip-label">布林突破上軌 <span class="tooltip-icon" data-tooltip="突破布林通道上緣，代表股價波動率放大，可能啟動新一波趨勢">?</span></span><span class="badge-type badge-buy">買入</span></div>
+                                <span class="chip-desc">%B &gt; 1.0</span>
+                            </label>
+                            <label class="filter-chip">
+                                <input type="checkbox" value="bollDown">
+                                <div class="chip-header"><span class="chip-label">布林跌破下軌 <span class="tooltip-icon" data-tooltip="跌破布林通道下緣，代表股價極度弱勢">?</span></span><span class="badge-type badge-sell">賣出</span></div>
+                                <span class="chip-desc">%B &lt; 0.0</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="advanced-group mt-4">
+                        <div class="flex-row" style="justify-content: space-between; margin-bottom: var(--space-sm);">
+                            <h3 class="section-title" style="margin:0;">動能</h3>
+                            <span class="text-caption">KD 與 MACD</span>
+                        </div>
+                        <div class="filter-grid" style="margin-bottom: 0;">
+                            <label class="filter-chip">
+                                <input type="checkbox" value="kdGold">
+                                <div class="chip-header"><span class="chip-label">KD 黃金交叉 <span class="tooltip-icon" data-tooltip="K線上穿D線，短線動能轉強">?</span></span><span class="badge-type badge-buy">買入</span></div>
+                                <span class="chip-desc">K 線上穿 D 線</span>
+                            </label>
+                            <label class="filter-chip">
+                                <input type="checkbox" value="kdDeath">
+                                <div class="chip-header"><span class="chip-label">KD 死亡交叉 <span class="tooltip-icon" data-tooltip="K線下穿D線，短線動能轉弱">?</span></span><span class="badge-type badge-sell">賣出</span></div>
+                                <span class="chip-desc">K 線下穿 D 線</span>
+                            </label>
+                            <label class="filter-chip">
+                                <input type="checkbox" value="macdUp">
+                                <div class="chip-header"><span class="chip-label">MACD 翻多 <span class="tooltip-icon" data-tooltip="MACD柱狀圖由負轉正，中長線趨勢可能向上">?</span></span><span class="badge-type badge-buy">買入</span></div>
+                                <span class="chip-desc">柱狀由負轉正</span>
+                            </label>
+                            <label class="filter-chip">
+                                <input type="checkbox" value="macdDown">
+                                <div class="chip-header"><span class="chip-label">MACD 翻空 <span class="tooltip-icon" data-tooltip="MACD柱狀圖由正轉負，中長線趨勢可能向下">?</span></span><span class="badge-type badge-sell">賣出</span></div>
+                                <span class="chip-desc">柱狀由正轉負</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="advanced-group mt-4">
+                        <div class="flex-row" style="justify-content: space-between; margin-bottom: var(--space-sm);">
+                            <h3 class="section-title" style="margin:0;">量價</h3>
+                            <span class="text-caption">成交量與 RSI 狀態</span>
+                        </div>
+                        <div class="filter-grid" style="margin-bottom: 0;">
+                            <label class="filter-chip">
+                                <input type="checkbox" value="volSpike">
+                                <div class="chip-header"><span class="chip-label">量能放大 &gt;1.5x <span class="tooltip-icon" data-tooltip="今日成交量大於過去5天的1.5倍">?</span></span><span class="badge-type badge-info">篩選</span></div>
+                                <span class="chip-desc">今日量超過 5 日均量 1.5 倍</span>
+                            </label>
+                            <label class="filter-chip">
+                                <input type="checkbox" value="rsiLow">
+                                <div class="chip-header"><span class="chip-label">RSI &lt; 30 <span class="tooltip-icon" data-tooltip="RSI低於30，股價可能被錯殺，醞釀反彈">?</span></span><span class="badge-type badge-buy">買入</span></div>
+                                <span class="chip-desc">超賣區，可能反彈</span>
+                            </label>
+                            <label class="filter-chip">
+                                <input type="checkbox" value="rsiHigh">
+                                <div class="chip-header"><span class="chip-label">RSI &gt; 70 <span class="tooltip-icon" data-tooltip="RSI大於70，股價短線過熱，隨時可能獲利回吐">?</span></span><span class="badge-type badge-sell">賣出</span></div>
+                                <span class="chip-desc">超買區，注意回檔</span>
+                            </label>
+                            <label class="filter-chip">
+                                <input type="checkbox" value="ibsLow">
+                                <div class="chip-header"><span class="chip-label">IBS &le; 0.2 <span class="tooltip-icon" data-tooltip="當日收盤價在當日最低點附近，隔日容易出現短彈">?</span></span><span class="badge-type badge-buy">買入</span></div>
+                                <span class="chip-desc">收在當日低點，反彈機率高</span>
+                            </label>
+                            <label class="filter-chip">
+                                <input type="checkbox" value="ibsHigh">
+                                <div class="chip-header"><span class="chip-label">IBS &ge; 0.8 <span class="tooltip-icon" data-tooltip="當日收盤價在當日最高點附近，隔日容易開低">?</span></span><span class="badge-type badge-sell">賣出</span></div>
+                                <span class="chip-desc">收在當日高點，回檔機率高</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 動作列 -->
+                <div class="action-bar">
+                    <div class="flex-row">
+                        <button type="button" class="btn btn-primary" id="btnScreenScan" style="padding: 12px 32px; font-size: 16px;">🔍 開始篩選</button>
+                        <button type="button" class="btn btn-secondary" id="btnClearAll" style="padding: 12px 24px; font-size: 16px;">🗑️ 一鍵清除</button>
+                        <div class="scan-conn-status" id="scanConnStatus"></div>
+                    </div>
+                    <div class="flex-row">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="openHeatmapModal()">📊 產業熱力圖</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="openRankingModal()">🏆 排行榜</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="openHistoryModal()">📜 歷史紀錄</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 篩選結果區塊 -->
+        <div class="card" id="screenResultCard" style="display:none">
+            <div class="card-body" style="padding: 0;">
+                <div class="summary-box" id="summaryBox"></div>
+                <div class="table-wrapper">
+                    <table class="data-table" id="screenResultTable">
+                        <thead>
+                            <tr>
+                                <th>代號</th><th>名稱</th><th>收盤價</th><th>漲跌%</th>
+                                <th>停利目標1</th><th>停利目標2</th><th>建議停損</th><th>操作建議</th>
+                            </tr>
+                        </thead>
+                        <tbody id="screenResultBody"></tbody>
+                    </table>
+                </div>
+                <div style="padding: var(--space-md) var(--space-lg); border-top: 1px solid var(--border-color); color: var(--text-muted); font-size: 13px;">
+                    ⚠️ 以上建議僅供參考，基於技術分析計算，不構成投資建議。投資有風險，請自行評估。
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ================= 彈出視窗群 ================= -->
+
+    <!-- 新手教學與說明 Modal -->
+    <div class="modal-overlay" id="helpModal">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh;">
+            <div class="modal-header">
+                <h3 class="text-heading flex-row">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    系統說明與教學手冊
+                </h3>
+                <button class="modal-close" onclick="closeModal('helpModal')">✕</button>
+            </div>
+            <div class="modal-body" style="line-height: 1.8; overflow-y: auto;">
+                
+                <h4 class="text-subheading mb-4" style="color:var(--primary-color);">🚀 快速上手三步驟</h4>
+                <ol style="margin-left: 20px; color: var(--text-secondary); margin-bottom: var(--space-lg);">
+                    <li><strong>單股快速健檢：</strong> 如果您手上有特定股票想診斷，直接在最上方的「🔍單股快速健檢」輸入代號即可，系統會瞬間給出圖表與評分！</li>
+                    <li><strong>條件篩選：</strong> 切換台股或美股，並勾選您想要的條件（所有條件為 AND 嚴格比對），點擊「開始篩選」。</li>
+                    <li><strong>查看 AI 診斷：</strong> 掃描完成後，點擊列表中的「AI 診斷」按鈕，即可觀看視覺化走勢圖表與白話文的進出場建議。</li>
+                </ol>
+
+                <h4 class="text-subheading mb-4" style="color:var(--primary-color);">💡 系統特色與核心功能</h4>
+                <ol style="margin-left: 20px; color: var(--text-secondary); margin-bottom: var(--space-lg);">
+                    <li><strong>健康度評分 (0~100)：</strong> AI 會根據站上均線、RSI、量能等因子計算總分，讓您一眼看穿股票體質。<br>
+                        <span style="display:inline-block; margin-top:4px; margin-bottom:4px; padding: 4px 8px; background: rgba(16,185,129,0.1); color: #10B981; border-radius: 4px;">🟢 80分以上 (體質優良)</span>：多頭強勢，各項指標均表現優異。<br>
+                        <span style="display:inline-block; margin-bottom:4px; padding: 4px 8px; background: rgba(245,158,11,0.1); color: #F59E0B; border-radius: 4px;">🟡 50~79分 (震盪盤整)</span>：多空交戰，方向尚未完全明朗，需等待突破訊號。<br>
+                        <span style="display:inline-block; margin-bottom:4px; padding: 4px 8px; background: rgba(239,68,68,0.1); color: #EF4444; border-radius: 4px;">🔴 49分以下 (弱勢危險)</span>：空頭弱勢，跌破重要均線或動能極弱，接刀風險極高。
+                    </li>
+                    <li><strong>全市場真實籌碼 (TWSE OpenAPI)：</strong> 系統在您點擊篩選時，會極速向臺灣證交所官方 API 抓取全市場「三大法人買賣超」數據，提供您最真實的外資與投信動向（註：目前官方 API 主要支援上市股票）。</li>
+                    <li><strong>支撐壓力線自動繪製：</strong> AI 診斷圖表會自動畫出「近20日最高價(壓力)」與「近20日最低價(支撐)」，並計算空間比例輔助您的盈虧比判斷。</li>
+                    <li><strong>多因子綜合評分 (防洗盤)：</strong> 勾選「適合買進」時，系統強制要求股價必須站上 MA20 月線，且多項指標加總需達標，幫您過濾假突破。</li>
+                    <li><strong>一鍵清除功能：</strong> 點擊「🗑️ 一鍵清除」按鈕，可快速重置所有篩選條件、清除自選股名單與檢測結果，方便您重新開始分析。</li>
+                </ol>
+
+                <h4 class="text-subheading mb-4" style="color:var(--primary-color);">📖 關鍵術語與參數說明</h4>
+                <ul style="color: var(--text-secondary); list-style: none; padding: 0; margin-bottom: var(--space-lg);">
+                    <li style="margin-bottom: 12px;"><strong>MA5 (周線) / MA20 (月線)：</strong> 過去 5 天與 20 天的平均收盤價。站上月線代表中期趨勢轉強，跌破代表轉弱。</li>
+                    <li style="margin-bottom: 12px;"><strong>RSI (相對強弱指標)：</strong> 衡量股價漲跌力度。低於 30 為超賣 (容易反彈)，高於 70 為超買 (容易回檔)。</li>
+                    <li style="margin-bottom: 12px;"><strong>量比：</strong> 今日成交量與過去 5 日平均成交量的比值。大於 1.5 倍代表有異常資金動能或主力介入。</li>
+                    <li style="margin-bottom: 12px;"><strong>IBS (內部強弱指標)：</strong> 衡量當日收盤價在當日震盪區間的相對位置。數值越低 (≤0.2) 代表收在最低點附近，隔日容易有技術性反彈；數值越高 (≥0.8) 代表收在最高點附近，容易遇到獲利賣壓。</li>
+                    <li style="margin-bottom: 12px;"><strong>KD (隨機指標)：</strong> 衡量近期價格強弱。K線上穿D線稱為「黃金交叉」(短線動能轉強)；K線下穿D線稱為「死亡交叉」(短線動能轉弱)。</li>
+                    <li style="margin-bottom: 12px;"><strong>K線 (Candlestick)：</strong> 紀錄一天股價走勢的圖形。實體很長的紅K(大陽線)代表買盤強勢；實體很長的黑K(大陰線)代表賣壓沉重。帶有長上影線代表遭遇反壓，長下影線代表下方有支撐。</li>
+                    <li style="margin-bottom: 12px; padding: 8px; background: rgba(0,0,0,0.03); border-left: 4px solid var(--primary-color);">
+                        <strong>停利與停損是如何計算的？</strong><br>
+                        系統採用固定比例法（適合短波段交易）：<br>
+                        • <strong>停利目標1：</strong> 收盤價 + 5% (適合短線先入袋為安)<br>
+                        • <strong>停利目標2：</strong> 收盤價 + 10% (波段目標)<br>
+                        • <strong>建議停損：</strong> 收盤價 - 5% (跌破此價格強烈建議認賠出場)
+                    </li>
+                </ul>
+
+                <h4 class="text-subheading mb-4" style="color:var(--primary-color);">⚔️ 實戰範例教學</h4>
+                <div style="background: rgba(0,0,0,0.02); padding: 16px; border-radius: 8px; margin-bottom: var(--space-lg); color: var(--text-secondary); font-size: 14px; border: 1px solid var(--border-color);">
+                    <strong>【範例一】跟著主力買進：</strong> 勾選「適合買進」+「投信買超」+「外資買超」。<br>
+                    👉 適用時機：尋找技術面強勢且具有真實籌碼護航的安心標的。<br><br>
+                    <strong>【範例二】搶反彈策略 (左側交易)：</strong> 勾選「超跌反彈」+「IBS &le; 0.2」+「跌破 MA20」。<br>
+                    👉 適用時機：個股短線乖離過大，尋找收在當日最低點且 RSI 極低的標的，博取隔日反彈。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI 診斷 Modal -->
+    <div class="modal-overlay" id="aiDiagModal">
+        <div class="modal-content" style="max-width: 750px;">
+            <div class="modal-header" style="display:flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <h3 class="text-heading flex-row" id="aiDiagTitle" style="color:var(--primary-color); margin: 0;">🤖 AI 診斷報告</h3>
+                <div id="aiDiagScoreBadge" style="margin-right: auto; margin-left: 12px;"></div>
+                <button class="modal-close" onclick="closeModal('aiDiagModal')">✕</button>
+            </div>
+            <div class="modal-body" style="line-height: 1.8; overflow-y: auto;">
+                
+                <!-- 視覺化圖表區塊 -->
+                <div style="margin-bottom: var(--space-lg);">
+                    <h4 style="font-size: 16px; margin-bottom: 8px; border-left: 4px solid #F59E0B; padding-left: 8px;">📈 近期走勢圖與支撐壓力 (近60日)</h4>
+                    <div class="chart-container">
+                        <canvas id="aiChartCanvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- 建議區塊 -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: var(--space-lg);">
+                    <div style="background: rgba(16, 185, 129, 0.05); padding: 16px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.2);">
+                        <h4 style="font-size: 16px; margin-bottom: 8px; color: var(--trade-down-sell);">💼 持有者建議 (賣出/續抱)</h4>
+                        <div id="aiDiagHolder" style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;"></div>
+                    </div>
+                    <div style="background: rgba(239, 68, 68, 0.05); padding: 16px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.2);">
+                        <h4 style="font-size: 16px; margin-bottom: 8px; color: var(--trade-up-buy);">🛒 進場者建議 (買入/觀望)</h4>
+                        <div id="aiDiagBuyer" style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;"></div>
+                    </div>
+                </div>
+
+                <!-- 技術分析區塊 -->
+                <div style="margin-bottom: var(--space-lg);">
+                    <h4 style="font-size: 16px; margin-bottom: 8px; border-left: 4px solid var(--primary-color); padding-left: 8px;">📊 綜合技術判定</h4>
+                    <div id="aiDiagTech" style="color: var(--text-secondary); background: rgba(0,0,0,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);"></div>
+                </div>
+                <div style="margin-bottom: var(--space-lg);">
+                    <h4 style="font-size: 16px; margin-bottom: 8px; border-left: 4px solid var(--info-color); padding-left: 8px;">🕯️ K線型態解析</h4>
+                    <div id="aiDiagKline" style="color: var(--text-secondary); background: rgba(0,0,0,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);"></div>
+                </div>
+                <div style="margin-bottom: var(--space-md);">
+                    <h4 style="font-size: 16px; margin-bottom: 8px; border-left: 4px solid var(--warning-color); padding-left: 8px;">⚖️ 量價關係心法</h4>
+                    <div id="aiDiagVP" style="color: var(--text-secondary); background: rgba(0,0,0,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);"></div>
+                </div>
+                
+                <!-- 警語 -->
+                <div class="text-caption" style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px dashed var(--border-color); color: var(--text-muted);">
+                    ⚠️ 此健檢結果為系統基於技術指標之運算，不構成任何真實籌碼面與基本面之投資建議。投資有風險，請自行評估。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 排行榜 Modal -->
+    <div class="modal-overlay" id="rankModal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 class="text-heading flex-row"><span style="color:#FCD34D">🏆</span> 掃描結果排行榜</h3>
+                <button class="modal-close" onclick="closeModal('rankModal')">✕</button>
+            </div>
+            <div class="modal-body" style="padding: 0;">
+                <div style="padding: var(--space-md); border-bottom: 1px solid var(--border-color); display: flex; gap: var(--space-sm); flex-wrap: wrap;">
+                    <button class="btn btn-secondary" onclick="sortRanking('rsi-asc')" style="font-size: 13px;">RSI 最低</button>
+                    <button class="btn btn-secondary" onclick="sortRanking('rsi-desc')" style="font-size: 13px;">RSI 最高</button>
+                    <button class="btn btn-secondary" onclick="sortRanking('vol-desc')" style="font-size: 13px;">量比最大</button>
+                    <button class="btn btn-secondary" onclick="sortRanking('ibs-asc')" style="font-size: 13px;">IBS 最低</button>
+                    <button class="btn btn-secondary" onclick="sortRanking('ibs-desc')" style="font-size: 13px;">IBS 最高</button>
+                </div>
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead><tr><th>#</th><th>名稱</th><th>收盤價</th><th>漲跌幅</th><th>指標數值</th><th>信號</th></tr></thead>
+                        <tbody id="rankTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 歷史紀錄 Modal -->
+    <div class="modal-overlay" id="historyModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 class="text-heading flex-row"><span>📜</span> 篩選歷史紀錄</h3>
+                <button class="modal-close" onclick="closeModal('historyModal')">✕</button>
+            </div>
+            <div class="modal-body" style="padding: 0;">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead><tr><th>掃描時間</th><th>市場</th><th>嚴格比對條件</th><th>符合/母體</th><th>強勢代號</th></tr></thead>
+                        <tbody id="historyTableBody"></tbody>
+                    </table>
+                </div>
+                <div style="padding: var(--space-md); border-top: 1px solid var(--border-color); text-align: right;">
+                    <button class="btn btn-secondary" style="color: var(--trade-down-sell); border-color: var(--trade-down-sell);" onclick="clearHistory()">清除全部紀錄</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 熱力圖 Modal -->
+    <div class="modal-overlay" id="heatmapModal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 class="text-heading flex-row"><span>📊</span> 產業連動熱力圖</h3>
+                <button class="modal-close" onclick="closeModal('heatmapModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-caption mb-4">依據最後一次掃描結果的漲跌幅動態生成，板塊越大代表權值/股價越高。<br>深紅代表強勢大漲，深綠代表弱勢大跌。</p>
+                <div class="heatmap-grid" id="heatmapContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div>v0.3.6 | &copy;2026 <a href="https://huobest.com/" target="_blank">霍家私塾</a></div>
+        <div style="margin-top: 8px;">⚠️ 本平台僅供模擬交易學習用途，不構成任何投資建議。投資有風險，請自行評估。</div>
+    </footer>
+
+    <script>
+        // ================= 1. 核心狀態與工具 =================
+        const AppState = {
+            theme: localStorage.getItem('theme') || 'dark',
+            market: 'tw',
+            customStocks: [],
+            isConnecting: false,
+            lastScanResults: [],
+            marketRegime: { isBull: true, text: "偏多" },
+            lastDataDate: '', 
+            institutionalData: {} // 存放 TWSE OpenAPI 全市場籌碼快取
+        };
+
+        const DOM = {
+            themeToggle: document.getElementById('themeToggle'), themeIcon: document.getElementById('themeIcon'), themeText: document.getElementById('themeText'),
+            marketTabs: document.querySelectorAll('.screener-tab'),
+            customStockInput: document.getElementById('customStockInput'), btnAddCustomStock: document.getElementById('btnAddCustomStock'), customStockTags: document.getElementById('customStockTags'),
+            btnScan: document.getElementById('btnScreenScan'), resultCard: document.getElementById('screenResultCard'), resultBody: document.getElementById('screenResultBody'), summaryBox: document.getElementById('summaryBox'),
+            scanConnStatus: document.getElementById('scanConnStatus'), marketStatusBox: document.getElementById('marketStatusBox'), marketIndexVal: document.getElementById('marketIndexVal'),
+            fearGreedMeter: document.getElementById('fearGreedMeter'), meterIndicator: document.getElementById('meterIndicator'), meterText: document.getElementById('meterText'),
+            marketDate: document.getElementById('marketDate'), marketRegimeBadge: document.getElementById('marketRegimeBadge'),
+            quickCheckInput: document.getElementById('quickCheckInput'), btnQuickCheck: document.getElementById('btnQuickCheck'), quickCheckStatus: document.getElementById('quickCheckStatus'),
+            btnClearAll: document.getElementById('btnClearAll') // 新增一鍵清除按鈕
+        };
+
+        const twStockNames = {
+            '2330': '台積電', '2317': '鴻海', '2454': '聯發科', '2308': '台達電', '2303': '聯電', '2412': '中華電', '3711': '日月光投控', '2382': '廣達', '2881': '富邦金', '2882': '國泰金', '2884': '玉山金', '2886': '兆豐金', '2891': '中信金', '2892': '第一金', '2880': '華南金', '2883': '開發金', '2885': '元大金', '2887': '台新金', '2890': '永豐金', '2801': '彰銀', '5880': '合庫金', '2301': '光寶科', '2302': '麗正', '2305': '全友', '2311': '日月光', '2312': '金寶', '2313': '華通', '2314': '台揚', '2324': '仁寶', '2327': '國巨', '2329': '華泰', '2331': '精英', '2337': '旺宏', '2338': '光罩', '2340': '光磊', '2342': '茂矽', '2344': '華邦電', '2345': '智邦', '2347': '聯強', '2349': '錸德', '2351': '順德', '2352': '佳世達', '2353': '宏碁', '2354': '鴻準', '2355': '敬鵬', '2356': '英業達', '2357': '華碩', '2358': '廷鑫', '2359': '所羅門', '2360': '致茂', '2362': '藍天', '2363': '矽統', '2364': '倫飛', '2365': '昆盈', '2367': '燿華', '2368': '金像電', '2369': '菱生', '2371': '大同', '2373': '震旦行', '2374': '佳能', '2375': '智寶', '2376': '技嘉', '2377': '微星', '2379': '瑞昱', '2380': '虹光', '2383': '台光電', '2384': '勝華', '2385': '群光', '2387': '精元', '2388': '威盛', '2390': '云辰', '2392': '正崴', '2393': '億光', '2395': '研華', '2397': '友通', '2399': '映泰', '2401': '凌陽', '2402': '毅嘉', '2404': '漢唐', '2405': '浩鑫', '2406': '國碩', '2408': '南亞科', '2409': '友達', '2413': '環科', '2414': '精技', '2415': '錩新', '2417': '圓剛', '2419': '仲琦', '2420': '新巨', '2421': '建準', '2423': '固緯', '2424': '隴華', '2425': '承啟', '2426': '鼎元', '2427': '三商電', '2428': '興勤', '2429': '銘旺科', '2430': '燦坤', '2431': '聯昌', '2433': '互盛電', '2434': '統懋', '2436': '偉詮電', '2438': '翔耀', '2439': '美律', '2440': '太空梭', '2441': '超豐', '2442': '新美齊', '2443': '新利虹', '2444': '兆勁', '2449': '京元電子', '2450': '神腦', '2451': '創見', '2455': '全新', '2456': '奇力新', '2457': '飛宏', '2458': '義隆', '2459': '敦吉', '2460': '建通', '2461': '光群雷', '2462': '良得電', '2464': '盟立', '2465': '麗臺', '2466': '冠西電', '2467': '志聖', '2468': '華經', '2471': '資通', '2472': '立隆電', '2474': '可成', '2476': '鉅祥', '2477': '美隆電', '2478': '大毅', '2480': '敦陽科', '2481': '強茂', '2482': '連宇', '2483': '百容', '2484': '希華', '2485': '兆赫', '2486': '一詮', '2488': '漢平', '2489': '瑞軒', '2491': '吉祥全', '2492': '華新科', '2493': '揚博', '2495': '普安', '2496': '卓越', '2497': '怡利電', '2498': '宏達電', '2499': '東貝', '2501': '國建', '2504': '國產', '2505': '國揚', '2506': '太設', '2509': '全坤建', '2511': '太子', '2514': '龍邦', '2515': '中工', '2520': '冠德', '2524': '京城', '2527': '宏璟', '2528': '皇普', '2530': '華建', '2534': '宏盛', '2535': '達欣工', '2536': '宏普', '2537': '聯上發', '2538': '基泰', '2539': '櫻花建', '2540': '愛山林', '2542': '興富發', '2543': '皇昌', '2545': '皇翔', '2546': '根基', '2547': '日勝生', '2548': '華固', '2597': '潤弘', '2601': '益航', '2603': '長榮', '2605': '新興', '2606': '裕民', '2607': '榮運', '2608': '大榮', '2609': '陽明', '2610': '華航', '2611': '志信', '2612': '中航', '2613': '中櫃', '2614': '東森', '2615': '萬海', '2616': '山隆', '2617': '台航', '2618': '長榮航', '2634': '漢翔', '2701': '萬企', '2702': '華園', '2704': '國賓', '2705': '六福', '2706': '第一店', '2707': '晶華', '2712': '遠雄來', '2727': '王品', '2731': '雄獅', '2812': '台中銀', '2816': '旺旺保', '2820': '華票', '2823': '中壽', '2832': '台產', '2834': '臺企銀', '2836': '高雄銀', '2838': '聯邦銀', '2845': '遠東銀', '2849': '安泰銀', '2850': '新產', '2851': '中再保', '2852': '第一保', '2855': '統一證', '2856': '元富證', '2867': '三商壽', '2888': '新光金', '2889': '國票金', '2901': '欣欣', '2903': '遠百', '2904': '匯僑', '2905': '三商', '2906': '高林', '2908': '特力', '2910': '統領', '2911': '麗嬰房', '2912': '統一超', '2913': '農林', '2915': '潤泰全', '2923': 'F-鼎固', '2929': '淘帝-KY', '2936': '客思達-KY', '3008': '大立光', '3010': '華立', '3014': '聯陽', '3015': '全漢', '3016': '嘉晶', '3017': '奇鋐', '3018': '同開', '3019': '亞光', '3021': '鴻名', '3022': '威強電', '3023': '信邦', '3024': '憶聲', '3025': '星通', '3026': '禾伸堂', '3027': '盛達', '3028': '增你強', '3029': '零壹', '3030': '德律', '3031': '佰鴻', '3032': '偉訓', '3033': '威健', '3034': '聯詠', '3035': '智原', '3036': '文曄', '3037': '欣興', '3038': '全台', '3040': '遠見', '3041': '揚智', '3042': '晶技', '3043': '科風', '3044': '健鼎', '3045': '台灣大', '3046': '建碁', '3047': '訊舟', '3048': '益登', '3049': '和鑫', '3050': '鈺德', '3051': '力特', '3052': '夆典', '3054': '立萬利', '3055': '蔚華科', '3056': '總太', '3057': '喬鼎', '3058': '立德', '3059': '華晶科', '3060': '銘異', '3062': '建漢', '3149': '正達', '3189': '景碩', '3231': '緯創', '3376': '新日興', '3380': '明泰', '3443': '創意', '3481': '群創', '3494': '誠研', '3504': '揚明光', '3515': '華擎', '3532': '台勝科', '3533': '嘉澤', '3576': '新日光', '3583': '辛耘', '3588': '通嘉', '3593': '力銘', '3617': '碩天', '3653': '健策', '3661': '世芯-KY', '3665': '貿聯-KY', '3679': '新至陞', '3682': '亞太電', '3686': '達能', '3694': '海華', '3697': '晨品', '3701': '大眾控', '3702': '大聯大', '3703': '欣陸', '3704': '合勤控', '3705': '永信', '3706': '神達', '4904': '遠傳', '4938': '和碩', '4958': '臻鼎-KY', '5243': '乙盛-KY', '5264': '鎧勝-KY', '5269': '祥碩', '5283': '禾聯碩', '5285': '界霖', '5347': '世界', '5434': '崇越', '5469': '瀚宇博', '5471': '松翰', '5483': '中美晶', '5484': '慧友', '5515': '建碁', '5519': '隆大', '5522': '遠雄', '5525': '順天', '5531': '鄉林', '5534': '長虹', '5538': '東明-KY', '5607': '遠雄港', '5608': '四維航', '5706': '鳳凰', '5871': '中租-KY', '5876': '上海商銀', '5903': '全家', '5904': '寶雅', '6005': '群益證', '6024': '群益期', '6116': '彩晶', '6120': '達運', '6133': '金橋', '6139': '亞翔', '6142': '友勁', '6152': '百一', '6153': '嘉聯益', '6155': '鉅邦', '6164': '華興', '6166': '凌華', '6168': '宏齊', '6176': '瑞儀', '6183': '關貿', '6184': '大豐電', '6189': '豐藝', '6191': '精成科', '6196': '帆宣', '6197': '佳必琪', '6201': '亞弘電', '6202': '盛群', '6205': '詮欣', '6206': '飛捷', '6209': '今國光', '6213': '聯茂', '6214': '精誠', '6215': '和椿', '6216': '居易', '6224': '聚鼎', '6225': '天瀚', '6226': '光鼎', '6230': '超眾', '6239': '力成', '6243': '迅杰', '6269': '台郡', '6271': '同欣電', '6277': '宏正', '6278': '台表科', '6281': '全國電', '6282': '康舒', '6283': '淳安', '6285': '啟碁', '6288': '聯嘉', '6289': '華上', '6405': '悅城', '6409': '旭隼', '6412': '群電', '6414': '樺漢', '6415': '矽力-KY', '6416': '瑞祺電通', '6451': '訊芯-KY', '6456': 'GIS-KY', '6477': '安集', '6488': '環球晶', '6504': '南六', '6505': '台塑化', '6515': '穎崴', '6526': '達發', '6531': '愛普', '6533': '晶心科', '6552': '易華電', '6558': '興能高', '6568': '宏觀', '6573': '虹揚-KY', '6582': '申豐', '6592': '和潤企業', '6669': '緯穎', '6670': '復盛應用', '6671': '三能-KY', '6719': '力智', '6756': '威鋒電子', '6770': '力積電', '6789': '采鈺', '6890': '台星科', '8046': '南電', '8070': '長華', '8072': '陞泰', '8101': '華冠', '8103': '瀚荃', '8105': '凌巨', '8110': '華東', '8112': '至上', '8131': '福懋科', '8150': '南茂', '8163': '達方', '8210': '勤誠', '8213': '志超', '8215': '明基材', '8222': '寶一', '8249': '菱光', '8261': '富鼎', '8271': '宇瞻', '8299': '群聯', '8341': '日友', '8358': '金居', '8422': '可寧衛', '8454': '富邦媒', '8464': '億豐', '8478': '東哥遊艇', '8926': '台汽電', '8996': '高力', '9802': '鈺齊-KY', '9904': '寶成', '9907': '統一實', '9910': '豐泰', '9912': '偉聯', '9914': '美利達', '9917': '中保科', '9921': '巨大', '9924': '福興', '9925': '新保', '9926': '新海', '9927': '泰銘', '9930': '中聯資源', '9931': '欣高', '9933': '中鼎', '9934': '成霖', '9935': '慶豐富', '9937': '全國', '9938': '百和', '9939': '宏全', '9940': '信義', '9941': '裕融', '9942': '茂順', '9943': '好樂迪', '9944': '新麗', '9945': '潤泰新', '9946': '三發地產', '9955': '佳龍', '9958': '世紀鋼', '1101': '台泥', '1102': '亞泥', '1103': '嘉泥', '1104': '環泥', '1108': '幸福', '1109': '信大', '1110': '東泥', '1201': '味全', '1203': '味王', '1210': '大成', '1213': '大飲', '1215': '卜蜂', '1216': '統一', '1217': '愛之味', '1218': '泰山', '1219': '福壽', '1220': '台榮', '1225': '福懋油', '1227': '佳格', '1229': '聯華', '1231': '聯華食', '1232': '大統益', '1233': '天仁', '1234': '黑松', '1235': '興泰', '1236': '宏亞', '1256': '鮮活果汁-KY', '1301': '台塑', '1303': '南亞', '1304': '台聚', '1305': '華夏', '1307': '三芳', '1308': '亞聚', '1309': '台達化', '1310': '台苯', '1312': '國喬', '1313': '聯成', '1314': '中石化', '1315': '達新', '1316': '上曜', '1319': '東陽', '1321': '大洋', '1323': '永裕', '1324': '地球', '1325': '恆大', '1326': '台化', '1402': '遠東新', '1409': '新纖', '1434': '福懋', '1440': '南紡', '1441': '大東', '1449': '佳和', '1451': '年興', '1452': '宏益', '1453': '大將', '1454': '台富', '1455': '集盛', '1457': '宜進', '1459': '聯發', '1460': '宏遠', '1463': '強盛', '1464': '得力', '1465': '偉全', '1466': '聚隆', '1467': '南緯', '1468': '昶和', '1470': '大魯閣', '1471': '首利', '1472': '三洋紡', '1473': '台南', '1474': '弘裕', '1475': '本盟', '1476': '儒鴻', '1477': '聚陽', '1503': '士電', '1504': '東元', '1506': '正道', '1507': '永大', '1512': '瑞利', '1513': '中興電', '1514': '亞力', '1515': '力山', '1516': '川飛', '1517': '利奇', '1519': '華城', '1521': '大億', '1522': '堤維西', '1524': '耿鼎', '1525': '江申', '1526': '日馳', '1527': '鑽全', '1528': '恩德', '1530': '亞崴', '1531': '高林股', '1532': '勤美', '1533': '車王電', '1535': '中宇', '1536': '和大', '1537': '廣隆', '1538': '正峰', '1539': '巨庭', '1540': '喬福', '1541': '錩泰', '1560': '中砂', '1568': '倉佑', '1582': '信錦', '1583': '程泰', '1586': '和勤', '1587': '吉茂', '1589': '永冠-KY', '1590': '亞德客-KY', '1592': '英瑞-KY', '1597': '直得', '1598': '岱宇', '1599': '宏佳騰', '1604': '聲寶', '1605': '華新', '1608': '華榮', '1609': '大亞', '1611': '中電', '1612': '宏泰', '1614': '三洋電', '1615': '大山', '1616': '億泰', '1617': '榮星', '1618': '合機', '1701': '中化', '1702': '南僑', '1707': '葡萄王', '1708': '東鹼', '1709': '和益', '1710': '東聯', '1711': '永光', '1712': '興農', '1713': '國化', '1714': '和桐', '1717': '長興', '1718': '中纖', '1720': '生達', '1721': '三晃', '1722': '台肥', '1723': '中碳', '1724': '台硝', '1725': '元禎', '1726': '永記', '1727': '中華化', '1730': '花仙子', '1731': '美吾華', '1732': '毛寶', '1733': '五鼎', '1734': '杏輝', '1735': '日勝化', '1736': '喬山', '1737': '臺鹽', '1752': '南光', '1760': '寶齡富錦', '1762': '中化生', '1773': '勝一', '1776': '展宇', '1783': '和康生', '1786': '科妍', '1789': '神隆', '1795': '美時', '1802': '台玻', '1805': '寶徠', '1806': '冠軍', '1808': '潤隆', '1809': '中釉', '1810': '和成', '1813': '寶利徠', '1817': '凱撒衛', '1902': '台紙', '1903': '士紙', '1904': '正隆', '1905': '華紙', '1906': '寶隆', '1907': '永豐餘', '1909': '榮成', '2002': '中鋼', '2006': '東和鋼鐵', '2007': '燁興', '2008': '高興昌', '2009': '第一銅', '2010': '春源', '2012': '春雨', '2013': '中鋼構', '2014': '中鴻', '2015': '豐興', '2017': '官田鋼', '2020': '美亞', '2022': '聚亨', '2023': '燁輝', '2024': '志聯', '2025': '千興', '2027': '大成鋼', '2028': '威致', '2029': '盛餘', '2030': '彰源', '2031': '新光鋼', '2032': '新鋼', '2033': '佳大', '2034': '允強', '2035': '唐榮', '2038': '海光', '2059': '川湖', '2101': '南港', '2102': '泰豐', '2103': '台橡', '2104': '國際中橡', '2105': '正新', '2106': '建大', '2107': '厚生', '2108': '南帝', '2109': '華豐', '2114': '鑫永銓', '2115': '六暉-KY', '2201': '裕隆', '2204': '中華', '2206': '三陽工業', '2207': '和泰車', '2208': '台船', '2211': '長榮鋼', '2227': '裕日車', '2228': '劍麟', '2231': '為升', '2233': '宇隆', '2236': '百達-KY', '2239': '英利-KY', '2243': '宏旭-KY', '3105': '穩懋', '3163': '波若威', '3209': '全速', '3264': '欣銓', '3293': '鑫科', '3297': '杭特', '3312': '弘憶股', '3323': '加百裕', '3372': '典範', '3374': '精材', '3388': '崇越電', '3430': '奇鈦科', '3432': '台端', '3441': '聯一光', '3444': '利機', '3454': '晶睿', '3479': '安勤', '3491': '昇達科', '3529': '力旺', '3535': '晶彩科', '3552': '同致', '3556': '禾瑞亞', '3563': '牧德', '3584': '介面', '3591': '艾笛森', '3609': '東林', '3615': '安可', '3624': '光頡', '3628': '盈正', '3642': '駿熠電', '3646': '艾恩特', '3662': '樂磬', '3669': '圓展', '3687': '歐買尬', '3707': '漢磊', '3714': '富采', '4108': '懷特', '4123': '晟德', '4128': '中天', '4129': '聯合', '4130': '健亞', '4137': '麗豐-KY', '4142': '國光生', '4147': '中裕', '4154': '康樂-KY', '4157': '太景*-KY', '4160': '創源', '4162': '智擎', '4163': '鑽石生', '4167': '展旺', '4168': '醣聯', '4174': '浩鼎', '4180': '安成藥', '4190': '佐登-KY', '4192': '杏國', '4414': '如興', '4426': '利勤', '4430': '耀億', '4432': '銘旺實', '4510': '高鋒', '4523': '永彰', '4526': '東台', '4527': '方土昶', '4529': '昶洧', '4530': '宏易', '4532': '瑞智', '4533': '協易機', '4534': '慶騰', '4536': '拓凱', '4540': '全球傳動', '4541': '晟田', '4542': '科嶠', '4543': '萬在', '4545': '銘鈺', '4550': '長佳', '4552': '力達-KY', '4555': '氣立', '4556': '旭然', '4557': '永新-KY', '4560': '強信-KY', '4562': '穎漢', '4566': '時碩工業', '4571': '鈦昇', '4572': '駐龍', '4576': '大銀微系統', '4581': '光隆精密-KY', '4707': '磐亞', '4711': '永純', '4712': '南璋', '4714': '永捷', '4720': '德淵', '4721': '美琪瑪', '4722': '國精化', '4726': '永昕', '4729': '熒茂', '4733': '上緯投控', '4735': '豪展', '4736': '泰博', '4737': '華廣', '4739': '康普', '4743': '合一', '4744': '皇將', '4746': '台耀', '4755': '三福化', '4763': '材料-KY', '4764': '雙鍵', '4766': '南寶', '4768': '晶呈科', '4770': '上品', '4806': '昇華', '4807': '日成-KY', '4903': '聯光通', '4905': '台聯電', '4906': '正文', '4908': '前鼎', '4909': '新復興', '4911': '德英', '4912': '聯德控股-KY', '4916': '事欣科', '4919': '新唐', '4924': '欣厚-KY', '4927': '泰鼎-KY', '4930': '燦星網', '4931': '新盛力', '4933': '友輝', '4934': '太極', '4935': '茂林-KY', '4942': '嘉彰', '4943': '康控-KY', '4944': '兆遠', '4947': '昂寶-KY', '4952': '凌通', '4953': '緯軟', '4956': '光鋐', '4960': '誠美材', '4961': '天鈺', '4966': '譜瑞-KY', '4967': '十銓', '4968': '立積', '4971': '英特磊', '4972': '湯石', '4974': '亞泰', '4976': '佳凌', '4977': '眾達-KY', '4979': '華星光', '4984': '科納-KY', '4989': '榮科', '4991': '環宇-KY', '4999': '鑫禾', '5009': '榮剛', '5011': '久陽', '5013': '強新', '5014': '建錩', '5015': '華祺', '5016': '松和', '6104': '創惟', '6108': '競國', '6109': '亞元', '6111': '大宇資', '6112': '聚碩', '6117': '迎廣', '6118': '建達', '6121': '新普', '6125': '廣運', '6127': '九豪', '6129': '普誠', '6131': '悠克', '6134': '萬旭', '6140': '訊達', '6141': '柏承', '6143': '振曜', '6144': '得利影', '6146': '耕興', '6147': '頎邦', '6151': '晉倫', '6154': '順發', '6156': '松上', '6158': '禾昌', '6160': '欣技', '6161': '捷波', '6163': '華電網', '6165': '捷泰', '6167': '久正', '6170': '統振', '6171': '亞銳士', '6172': '互億', '6173': '信昌電', '6174': '安碁', '6177': '達麗', '6180': '橘子', '6182': '合晶', '6185': '幃翔', '6186': '新潤', '6188': '廣明', '6192': '巨路', '6194': '育富', '6195': '詩肯', '6198': '凌泰', '6199': '天品', '6207': '雷科', '6208': '日揚', '6212': '理銘', '6217': '中探針', '6220': '岳豐', '6223': '旺矽', '6227': '茂綸', '6229': '研通', '6231': '系微', '6233': '旺玖', '6234': '高僑', '6235': '華孚', '6237': '驊訊', '6238': '勝麗', '6240': '松崗', '6241': '易通展', '6242': '立康', '6244': '茂迪', '6245': '立端', '6248': '沛波', '6251': '定穎', '6257': '矽格', '6261': '久元', '6263': '普萊德', '6266': '泰詠', '6268': '連展投控', '6274': '台燿', '6276': '安鈦克', '6279': '胡連', '6284': '佳邦', '6291': '沛亨', '6412': '群電', '6426': '統新', '6431': '光麗-KY', '6435': '大中', '6438': '迅得', '6442': '光聖', '6443': '元晶', '6446': '藥華藥', '6449': '鈺邦', '6457': '紘康', '6462': '神盾', '6464': '台數科', '6465': '威潤', '6470': '宇智', '6472': '保瑞', '6485': '點序', '6486': '互動', '6491': '晶碩', '6492': '生華科', '6494': '九齊', '6496': '圓創', '6499': '益安', '6508': '惠光', '6509': '聚和', '6510': '精測', '6512': '啟發電', '6514': '芮特-KY', '6523': '達爾膚', '6525': '捷敏-KY', '6527': '明達醫', '6532': '瑞耘', '6535': '順藥', '6538': '倉和', '6541': '泰福-KY', '6542': '隆中', '6547': '高端疫苗', '6548': '長科*', '6550': '北極星藥業-KY', '6556': '科磊', '6561': '是方', '6569': '醫揚', '6576': '逸達', '6578': '達邦蛋白', '6579': '研揚', '6581': '鋼聯', '6591': '動力-KY', '6596': '寬宏藝術', '6598': '能率集團', '6609': '瀧澤科', '6612': '奈米醫材', '6613': '朋億', '6615': '慧智', '6616': '特昇-KY', '6625': '必應', '6640': '均華', '6641': '基士德-KY', '6643': '戎翔', '6654': '天正國際', '6655': '科定', '6661': '威健生技', '6662': '樂斯科', '6664': '群翊', '6666': '羅麗芬-KY', '6668': '中揚光', '6672': '驊陞', '6674': '鋐寶', '6679': '鈺太', '6683': '雍智', '6691': '洋基工程', '6698': '旭暉應材', '6699': '臺庠', '6703': '軒郁', '6706': '惠特', '6712': '長聖', '6715': '嘉基', '6716': '應廣', '6741': '91APP*-KY', '6743': '安集', '6754': '匯僑設計', '6762': '達亞', '6768': '志強-KY', '6776': '展碁國際', '6781': 'AES-KY', '6782': '視陽', '6785': '昱展新藥', '6790': '永豐實', '6796': '晉弘', '6803': '崑鼎', '6805': '富世達', '6806': '森崴能源', '6810': '欣普羅', '6819': '運錩', '6830': '汎銓', '6835': '圖靈', '6869': '雲豹能源', '6878': '台鉅', '6879': '大華系統', '6903': '台虹', '8011': '台通', '8016': '矽創', '8021': '尖點', '8024': '佑華', '8027': '鈦昇', '8028': '昇陽半導體', '8029': '愛爾達', '8032': '光菱', '8033': '雷虎', '8034': '榮群', '8039': '台虹', '8040': '九暘', '8042': '金山電', '8043': '蜜望實', '8044': '網家', '8047': '星雲', '8048': '德勝', '8049': '晶采', '8050': '愛普', '8054': '安國', '8059': '凱碩', '8064': '東捷', '8067': '志旭', '8069': '元太', '8071': '能率豐', '8074': '鉅橡', '8076': '伍豐', '8081': '致新', '8083': '瑞穎', '8084': '巨虹', '8086': '宏捷科', '8088': '品安', '8091': '翔名', '8092': '建暐', '8096': '擎亞', '8104': '錸寶', '8109': '博大', '8111': '立碁', '8114': '振樺電', '8121': '越峰', '8171': '天宇', '8183': '精星', '8266': '中日新', '8284': '三竹', '8289': '泰藝', '8374': '羅昇', '8383': '千附', '8390': '金益鼎', '8404': '百容', '8416': '實威', '8426': '紅木-KY', '8427': '基勝-KY', '8429': '金麗-KY', '8435': '鉅邁', '8436': '大江', '8440': '綠電', '8442': '威宏-KY', '8443': '阿瘦', '8446': '華研', '8450': '霹靂', '8462': '柏文', '8466': '美吉吉-KY', '8467': '波力-KY', '8472': '夠麻吉', '8473': '山林水', '8480': '泰昇-KY', '8481': '政伸', '8482': '商億-KY', '8488': '吉源-KY', '8489': '三貝德', '8497': '創建', '8499': '鼎炫-KY', '8905': '裕國', '8906': '花王', '8908': '欣雄', '8923': '時報', '8924': '大田', '8927': '北基', '8928': '鉅明', '8929': '富堡', '8930': '青鋼', '8931': '大汽電', '8932': '宏大', '8933': '愛地雅', '8934': '衡平', '8936': '國統', '8937': '豐香', '8940': '新天地', '8941': '關中', '8942': '森鉅', '8996': '高力', '0050': '元大台灣50', '0056': '元大高股息', '006208': '富邦台50', '00878': '國泰永續高股息', '00919': '群益台灣精選高息', '00929': '復華台灣科技優息', '009816': '凱基台灣TOP50', '00940': '元大台灣價值高息', '00713': '元大台灣高息低波', '00881': '國泰台灣5G+', '00891': '中信關鍵半導體', '00892': '富邦台灣半導體', '0051': '元大中型100', '0052': '富邦科技', '00912': '中信臺灣智慧50', '00915': '凱基優選高股息30', '00918': '大華優利高填息30', '00927': '群益半導體收益', '00934': '中信成長高股息', '009901A': '群益投資級金融債', '009902A': '中信投資級公司債', '009903A': '富邦投資級公司債', '009904A': '凱基投資級公司債', '009905A': '國泰投資級公司債', '00687B': '國泰20年美債', '00679B': '元大美債20年', '00751B': '元大AAA至A公司債', '00720B': '元大投資級公司債', '00772B': '中信高評級公司債', '00773B': '中信優先金融債', '00933B': '國泰10Y+金融債', '00937B': '群益ESG投等債20+'
+        };
+
+        // 預設掃描母體 (為避免API Rate Limit與當機，維持原本精選的 ~90 檔)
+        const defaultTwStocks = ['2330', '2317', '2454', '2382', '2881', '2882', '2412', '2886', '2891', '2002', '3231', '2603', '2609', '2615', '1504', '2308', '2345', '2395', '3045', '2379', '1101', '1216', '1301', '1303', '2303', '2324', '2357', '2388', '2408', '2880', '2884', '2885', '2887', '2892', '2912', '3008', '3034', '3711', '4938', '5871', '6505', '9910', '0050', '0056', '00878', '00929', '2353', '2371', '2376', '2610', '2618', '2890', '3293', '3481', '3661', '4958', '5347', '6239', '6415', '8046', '8299', '8454', '9921', '1590', '2201', '2542', '3406', '4743', '1476', '1605', '2301', '2360', '3017', '2409', '2356', '1513', '1514', '1519', '3037', '2368', '2344', '2637', '2883', '5880', '2633', '2606', '2207', '9904', '2385'];
+        
+        const defaultUsStocks = [
+            'AAPL','MSFT','NVDA','GOOGL','AMZN','META','TSLA','AVGO','TSM','JPM',
+            'V','JNJ','WMT','UNH','MA','PG','HD','ORCL','COST','BAC','NFLX',
+            'AMD','INTC','CRM','CSCO','QCOM','PEP','KO','TMO','DIS','ADBE',
+            'ABBV','CVX','MCD','ACN','LIN','ABT','DHR','TXN','CMCSA','PFE','NKE',
+            'VZ','WFC','HON','PM','IBM','NOW','COP','BA','GE','CAT','MMM','RTX',
+            'GS','MS','BLK','SPGI','C','T','TMUS','NEE','DUK','SO','UNP',
+            'BMY','AMGN','MDT','GILD','ISRG','SYK','ZTS','ELV','LLY','CVS','CI'
+        ];
+
+        let aiChartInstance = null; // Chart.js 實例
+
+        // ================= UI 與事件綁定 =================
+        function updateThemeUI() {
+            if (AppState.theme === 'dark') { document.documentElement.classList.add('dark'); DOM.themeIcon.textContent = '☀️'; DOM.themeText.textContent = '亮色'; } 
+            else { document.documentElement.classList.remove('dark'); DOM.themeIcon.textContent = '🌙'; DOM.themeText.textContent = '暗色'; }
+        }
+        DOM.themeToggle.addEventListener('click', () => { AppState.theme = AppState.theme === 'dark' ? 'light' : 'dark'; localStorage.setItem('theme', AppState.theme); updateThemeUI(); });
+
+        // 單股一鍵健檢邏輯
+        DOM.btnQuickCheck.addEventListener('click', async () => {
+            const val = DOM.quickCheckInput.value.trim().toUpperCase();
+            if(!val) return alert('請先輸入要健檢的股票代號！');
+            
+            DOM.btnQuickCheck.innerText = '診斷中...';
+            DOM.btnQuickCheck.disabled = true;
+            DOM.quickCheckStatus.innerHTML = '<span class="conn-indicator conn-loading" style="display:inline-block;"></span> 抓取資料與運算中...';
+
+            const isTW = /^[0-9]{4,6}[A-Z]?$/.test(val) || AppState.market === 'tw'; 
+
+            try {
+                if(isTW && Object.keys(AppState.institutionalData).length === 0) {
+                    await fetchInstitutionalData(); // 若還沒載入籌碼快取則先載入
+                }
+                const stock = await fetchStockData(val, isTW);
+                if(stock) {
+                    DOM.quickCheckStatus.innerHTML = '<span style="color: var(--info-color);">✅ 診斷完成</span>';
+                    showAiDiag(stock); 
+                } else {
+                    DOM.quickCheckStatus.innerHTML = '<span style="color: var(--trade-down-sell);">❌ 找不到該股票資料或代號錯誤</span>';
+                }
+            } catch(e) {
+                DOM.quickCheckStatus.innerHTML = '<span style="color: var(--trade-down-sell);">❌ 抓取失敗，API連線異常請稍後再試</span>';
+            }
+
+            DOM.btnQuickCheck.innerText = '立即診斷';
+            DOM.btnQuickCheck.disabled = false;
+        });
+
+        DOM.quickCheckInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') DOM.btnQuickCheck.click(); });
+
+        // ================= 一鍵清除邏輯 =================
+        DOM.btnClearAll.addEventListener('click', () => {
+            // 1. 清除篩選條件 Checkbox
+            document.querySelectorAll('.filter-chip input[type="checkbox"]').forEach(cb => cb.checked = false);
+            
+            // 2. 清除自選股名單
+            AppState.customStocks = [];
+            renderCustomStockTags();
+            DOM.customStockInput.value = '';
+            
+            // 3. 清除單股健檢狀態
+            DOM.quickCheckInput.value = '';
+            DOM.quickCheckStatus.innerHTML = '';
+            
+            // 4. 隱藏下方掃描結果區塊
+            DOM.resultCard.style.display = 'none';
+            DOM.resultBody.innerHTML = '';
+            DOM.summaryBox.innerHTML = '';
+            
+            // 5. 清除狀態列與快取
+            DOM.scanConnStatus.innerHTML = '';
+            AppState.lastScanResults = [];
+        });
+
+        // ================= 書籤與自選股邏輯 =================
+        function addCustomStock() {
+            const val = DOM.customStockInput.value.trim().toUpperCase();
+            if(val && !AppState.customStocks.includes(val)) {
+                AppState.customStocks.push(val);
+                renderCustomStockTags();
+            }
+            DOM.customStockInput.value = '';
+        }
+        DOM.btnAddCustomStock.addEventListener('click', addCustomStock);
+        DOM.customStockInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') addCustomStock(); });
+        window.removeCustomStock = function(stock) { AppState.customStocks = AppState.customStocks.filter(s => s !== stock); renderCustomStockTags(); }
+        function renderCustomStockTags() { DOM.customStockTags.innerHTML = AppState.customStocks.map(stock => `<span class="custom-stock-tag">${stock} <button onclick="removeCustomStock('${stock}')">✕</button></span>`).join(''); }
+
+        function initBookmarks() {
+            try {
+                const select = document.getElementById('bookmarkSelect');
+                const saved = JSON.parse(localStorage.getItem('traderBookmarks') || '{}');
+                select.innerHTML = '<option value="">-- 選擇書籤 --</option>';
+                for (let name in saved) {
+                    const opt = document.createElement('option'); opt.value = name; opt.textContent = name;
+                    select.appendChild(opt);
+                }
+            } catch(e) { console.warn("Bookmarks init error", e); }
+        }
+        document.getElementById('btnSaveBookmark').addEventListener('click', () => {
+            try {
+                const name = document.getElementById('bookmarkNameInput').value.trim() || `組合_${new Date().getTime().toString().slice(-4)}`;
+                const checked = Array.from(document.querySelectorAll('.filter-chip input[type="checkbox"]:checked')).map(cb => cb.value);
+                if(checked.length === 0) return alert("請先勾選篩選條件再儲存！");
+                const saved = JSON.parse(localStorage.getItem('traderBookmarks') || '{}');
+                saved[name] = checked; localStorage.setItem('traderBookmarks', JSON.stringify(saved));
+                initBookmarks(); document.getElementById('bookmarkSelect').value = name;
+                alert(`已儲存書籤：${name}`);
+            } catch(e) {}
+        });
+        document.getElementById('btnLoadBookmark').addEventListener('click', () => {
+            try {
+                const name = document.getElementById('bookmarkSelect').value;
+                if(!name) return;
+                const filters = JSON.parse(localStorage.getItem('traderBookmarks') || '{}')[name];
+                if(filters) {
+                    document.querySelectorAll('.filter-chip input[type="checkbox"]').forEach(cb => cb.checked = false);
+                    filters.forEach(f => { const cb = document.querySelector(`.filter-chip input[value="${f}"]`); if(cb) cb.checked = true; });
+                }
+            } catch(e) {}
+        });
+        document.getElementById('btnDeleteBookmark').addEventListener('click', () => {
+            try {
+                const name = document.getElementById('bookmarkSelect').value;
+                if(!name) return alert('請先選擇要刪除的書籤！');
+                if(!confirm(`確定要刪除書籤「${name}」嗎？`)) return; 
+                const saved = JSON.parse(localStorage.getItem('traderBookmarks') || '{}');
+                delete saved[name]; localStorage.setItem('traderBookmarks', JSON.stringify(saved));
+                initBookmarks(); alert(`已成功刪除書籤「${name}」`);
+            } catch(e) {}
+        });
+
+        document.getElementById('btnExportBookmarks').addEventListener('click', (e) => {
+            e.preventDefault();
+            try {
+                const blob = new Blob([localStorage.getItem('traderBookmarks') || '{}'], {type: "application/json"});
+                const url  = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = "trader_bookmarks.json"; a.click(); URL.revokeObjectURL(url);
+            } catch(err) {}
+        });
+
+        document.getElementById('importBookmarkFile').addEventListener('change', (e) => {
+            const file = e.target.files[0]; if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const json = JSON.parse(evt.target.result);
+                    const saved = JSON.parse(localStorage.getItem('traderBookmarks') || '{}');
+                    Object.assign(saved, json); localStorage.setItem('traderBookmarks', JSON.stringify(saved));
+                    initBookmarks(); alert("匯入成功！");
+                } catch(err) { alert("檔案格式錯誤"); }
+            };
+            reader.readAsText(file); e.target.value = ''; 
+        });
+
+        // ================= 多平台競速抓取與籌碼 OpenAPI =================
+        const proxyUrls = ['https://api.allorigins.win/raw?url=', 'https://api.codetabs.com/v1/proxy?quest='];
+
+        async function fetchWithProxyRace(targetUrl) {
+            const promises = proxyUrls.map(async proxy => {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 6000); 
+                try {
+                    const res = await fetch(proxy + encodeURIComponent(targetUrl), { signal: controller.signal, cache: 'no-store' });
+                    clearTimeout(timeoutId);
+                    if (!res.ok) throw new Error('HTTP Error');
+                    const json = await res.json();
+                    if (!json) throw new Error('Empty JSON');
+                    return json;
+                } catch (e) {
+                    clearTimeout(timeoutId); throw e;
+                }
+            });
+            return await Promise.any(promises); 
+        }
+
+        // 一次性快取：TWSE 上市股票真實三大法人籌碼 (T86)
+        async function fetchInstitutionalData() {
+            AppState.institutionalData = {};
+            try {
+                const targetUrl = 'https://openapi.twse.com.tw/v1/fund/T86';
+                let data = null;
+                // 優先嘗試直接連線 (OpenAPI 支援 CORS)
+                try {
+                    let res = await fetch(targetUrl);
+                    if(res.ok) data = await res.json();
+                } catch(e) {}
+                
+                // 失敗則 fallback 使用 proxy
+                if(!data) { data = await fetchWithProxyRace(targetUrl); }
+                
+                if(data && Array.isArray(data)) {
+                    data.forEach(item => {
+                        const codeKey = Object.keys(item).find(k => k.toLowerCase() === 'code');
+                        // 動態適應 OpenAPI 欄位名稱 (找尋 Foreign 與 Diff，以及 Trust 與 Diff)
+                        const fKey = Object.keys(item).find(k => k.toLowerCase().includes('foreign') && k.toLowerCase().includes('diff'));
+                        const tKey = Object.keys(item).find(k => k.toLowerCase().includes('invest') && k.toLowerCase().includes('trust') && k.toLowerCase().includes('diff'));
+                        
+                        if(codeKey && item[codeKey]) {
+                            const symbol = item[codeKey].trim();
+                            let fDiff = 0, tDiff = 0;
+                            if(fKey && item[fKey]) fDiff = parseFloat(item[fKey].toString().replace(/,/g, ''));
+                            if(tKey && item[tKey]) tDiff = parseFloat(item[tKey].toString().replace(/,/g, ''));
+                            AppState.institutionalData[symbol] = { foreignDiff: fDiff, trustDiff: tDiff };
+                        }
+                    });
+                }
+            } catch(e) {
+                console.warn("TWSE Institutional data fetch failed", e);
+            }
+        }
+
+        async function fetchYahoo(symbolWithSuffix) {
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbolWithSuffix}?range=4mo&interval=1d`;
+            const json = await fetchWithProxyRace(url);
+            const quote = json?.chart?.result?.[0]?.indicators?.quote?.[0];
+            const timestamps = json?.chart?.result?.[0]?.timestamp;
+            
+            if (!quote || !quote.close || !Array.isArray(quote.close) || !timestamps) throw new Error('Yahoo Data Invalid');
+            
+            let closes = [], highs = [], lows = [], volumes = [], opens = [], dates = [];
+            for(let i=0; i<quote.close.length; i++) {
+                if(quote.close[i] != null && quote.high[i] != null && quote.low[i] != null && quote.volume[i] != null && quote.open[i] != null && timestamps[i]) {
+                    closes.push(quote.close[i]); highs.push(quote.high[i]); lows.push(quote.low[i]); volumes.push(quote.volume[i]); opens.push(quote.open[i]);
+                    const d = new Date(timestamps[i] * 1000);
+                    dates.push(`${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`);
+                }
+            }
+            if (closes.length < 20) throw new Error('Not enough data');
+            return { closes, highs, lows, volumes, opens, dates };
+        }
+
+        async function fetchFinMind(symbol) {
+            const d = new Date(); d.setMonth(d.getMonth() - 4);
+            const startStr = d.toISOString().split('T')[0];
+            const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${symbol}&start_date=${startStr}`;
+            const json = await fetchWithProxyRace(url);
+            if (!json || json.msg !== 'success' || !json.data || json.data.length < 20) throw new Error('FinMind Data Invalid');
+            
+            let closes = json.data.map(item => item.close);
+            let highs = json.data.map(item => item.max);
+            let lows = json.data.map(item => item.min);
+            let volumes = json.data.map(item => item.Trading_Volume);
+            let opens = json.data.map(item => item.open);
+            let dates = json.data.map(item => item.date.replace(/-/g, '/'));
+            return { closes, highs, lows, volumes, opens, dates };
+        }
+        
+        function calculateMA(dataArray, windowSize) {
+            let result = [];
+            for (let i = 0; i < dataArray.length; i++) {
+                if (i < windowSize - 1) { result.push(null); } 
+                else {
+                    let sum = 0; for (let j = 0; j < windowSize; j++) sum += dataArray[i - j];
+                    result.push(sum / windowSize);
+                }
+            }
+            return result;
+        }
+
+        async function fetchStockData(symbol, isTW) {
+            let rawData;
+            try {
+                if (isTW) { rawData = await Promise.any([ fetchYahoo(`${symbol}.TW`), fetchYahoo(`${symbol}.TWO`), fetchFinMind(symbol) ]); } 
+                else { rawData = await fetchYahoo(symbol); }
+            } catch(e) { return null; }
+
+            const { closes, highs, lows, volumes, opens, dates } = rawData;
+                
+            const today = { open: opens[opens.length-1], high: highs[highs.length-1], low: lows[lows.length-1], close: closes[closes.length-1], volume: volumes[volumes.length-1] };
+            const yesterday = { open: opens[opens.length-2], high: highs[highs.length-2], low: lows[lows.length-2], close: closes[closes.length-2], volume: volumes[volumes.length-2] };
+                
+            const currentPrice = today.close; const prevPrice = yesterday.close;
+            const changePercent = ((currentPrice - prevPrice) / prevPrice) * 100;
+            const dataDate = dates[dates.length-1];
+            AppState.lastDataDate = dataDate; 
+            
+            let sum20 = 0; for (let i = closes.length - 20; i < closes.length; i++) sum20 += closes[i];
+            const ma20 = sum20 / 20;
+            let sum5 = 0; for (let i = closes.length - 5; i < closes.length; i++) sum5 += closes[i];
+            const ma5 = sum5 / 5;
+
+            let sumVol5 = 0; for (let i = volumes.length - 5; i < volumes.length; i++) sumVol5 += volumes[i];
+            const avgVol5 = sumVol5 / 5; const currentVol = today.volume;
+            const volRatio = (avgVol5 > 0) ? (currentVol / avgVol5) : 1;
+
+            let gains = 0, losses = 0;
+            for (let i = closes.length - 14; i < closes.length; i++) {
+                let diff = closes[i] - closes[i - 1];
+                if (diff >= 0) gains += diff; else losses -= diff;
+            }
+            const avgLoss = losses / 14;
+            let rsi = 100; if (avgLoss !== 0) { rsi = 100 - (100 / (1 + ((gains/14) / avgLoss))); }
+
+            const currentHigh = today.high; const currentLow = today.low;
+            const ibs = (currentHigh - currentLow) === 0 ? 0.5 : (currentPrice - currentLow) / (currentHigh - currentLow);
+
+            let recentHigh20 = -Infinity; let recentLow20 = Infinity;
+            for (let i = highs.length - 20; i < highs.length; i++) {
+                if (highs[i] > recentHigh20) recentHigh20 = highs[i];
+                if (lows[i] < recentLow20) recentLow20 = lows[i];
+            }
+
+            let healthScore = 0;
+            if (currentPrice >= ma20) healthScore += 25;
+            if (currentPrice >= ma5) healthScore += 15;
+            if (rsi >= 50 && rsi <= 75) healthScore += 30;
+            else if (rsi > 75) healthScore += 15; 
+            else if (rsi >= 35 && rsi < 50) healthScore += 15; 
+            else healthScore += 5; 
+            if (volRatio >= 1.2) healthScore += 15;
+            if (changePercent > 0) healthScore += 15;
+
+            const body = Math.abs(today.close - today.open);
+            const upperShadow = today.high - Math.max(today.open, today.close);
+            const lowerShadow = Math.min(today.open, today.close) - today.low;
+            
+            const kline = {
+                isBigYang: today.close > today.open && (body / today.open > 0.03),
+                isBigYin: today.close < today.open && (body / today.open > 0.03),
+                hasLongUpper: upperShadow > body * 1.5 && upperShadow > today.close * 0.01,
+                hasLongLower: lowerShadow > body * 1.5 && lowerShadow > today.close * 0.01,
+                isGapUp: today.low > yesterday.high,
+                isGapDown: today.high < yesterday.low
+            };
+
+            const sliceCount = -60;
+            const historyObj = {
+                dates: dates.slice(sliceCount),
+                closes: closes.slice(sliceCount),
+                ma5: calculateMA(closes, 5).slice(sliceCount),
+                ma20: calculateMA(closes, 20).slice(sliceCount)
+            };
+
+            let score = 0;
+            let filters = [];
+            
+            if (currentPrice > ma20) { filters.push('aboveMA20'); score += 1; }
+            if (currentPrice < ma20) { filters.push('belowMA20'); score -= 1; }
+            if (rsi > 50) score += 1;
+            if (rsi < 50) score -= 1;
+            if (volRatio >= 1.5) { filters.push('volumeSpike'); score += 1; }
+            if (rsi < 30) { filters.push('rsiLow'); filters.push('oversold'); }
+            if (rsi > 70) filters.push('rsiHigh');
+            if (ibs <= 0.2) filters.push('ibsLow');
+            if (ibs >= 0.8) filters.push('ibsHigh');
+
+            // 結合快取中的真實籌碼判定
+            let hasForeignSupport = false; let hasTrustSupport = false;
+            if (AppState.institutionalData && AppState.institutionalData[symbol]) {
+                const inst = AppState.institutionalData[symbol];
+                if (inst.foreignDiff > 0) { filters.push('foreignBuy'); hasForeignSupport = true; }
+                if (inst.foreignDiff < 0) { filters.push('foreignSell'); }
+                if (inst.trustDiff > 0) { filters.push('trustBuy'); hasTrustSupport = true; }
+                if (inst.trustDiff < 0) { filters.push('trustSell'); }
+            }
+
+            if (currentPrice > ma20 && score >= 2) filters.push('buySignal');
+            if (currentPrice < ma20 && score <= -2) filters.push('sellSignal');
+
+            let actionSuggestion = "中性"; let actionType = "neutral";
+            if (currentPrice > ma20 && rsi > 55) { actionSuggestion = "強烈買進"; actionType = "strong_buy"; }
+            else if (currentPrice > ma20 && rsi <= 55) { actionSuggestion = "偏多觀望"; actionType = "buy"; }
+            else if (currentPrice < ma20 && rsi < 45) { actionSuggestion = "強烈賣出"; actionType = "strong_sell"; }
+            else if (currentPrice < ma20 && rsi >= 45) { actionSuggestion = "偏空觀望"; actionType = "sell"; }
+
+            if (!AppState.marketRegime.isBull && actionType === 'strong_buy') {
+                actionSuggestion = "保守進場 (大盤轉弱)";
+                actionType = "neutral"; 
+            }
+
+            let properName = isTW ? (twStockNames[symbol] || `台股 ${symbol}`) : symbol;
+
+            return { 
+                id: symbol, name: properName, price: currentPrice, change: changePercent, 
+                rsi: rsi, ma20: ma20, volRatio: volRatio, ibs: ibs, filters: filters, 
+                actionSuggestion: actionSuggestion, actionType: actionType, kline: kline,
+                dataDate: dataDate, history: historyObj,
+                recentHigh20: recentHigh20, recentLow20: recentLow20, healthScore: healthScore,
+                hasForeignSupport: hasForeignSupport, hasTrustSupport: hasTrustSupport
+            };
+        }
+
+        async function chunkedFetch(symbols, isTW, batchSize = 10) {
+            let results = [];
+            for (let i = 0; i < symbols.length; i += batchSize) {
+                const chunk = symbols.slice(i, i + batchSize);
+                DOM.scanConnStatus.innerHTML = `<span class="conn-indicator conn-loading"></span> 競速抓取與運算中：第 ${i+1}~${Math.min(i+batchSize, symbols.length)} 檔...`;
+                
+                const promises = chunk.map(sym => fetchStockData(sym, isTW));
+                const chunkResults = await Promise.allSettled(promises);
+                
+                chunkResults.forEach(res => {
+                    if (res.status === 'fulfilled' && res.value !== null) {
+                        results.push(res.value);
+                    }
+                });
+                
+                if (i + batchSize < symbols.length) {
+                    await new Promise(r => setTimeout(r, 600)); 
+                }
+            }
+            return results;
+        }
+
+        // ================= 大盤指數與濾網判斷 =================
+        function getMarketStatus(market) {
+            const now = new Date(); let isOpen = false;
+            if (market === 'tw') {
+                const twTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Taipei", hour12: false}));
+                const day = twTime.getDay(); const timeVal = twTime.getHours() * 100 + twTime.getMinutes();
+                isOpen = (day >= 1 && day <= 5 && timeVal >= 900 && timeVal <= 1330);
+            } else {
+                const usTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York", hour12: false}));
+                const day = usTime.getDay(); const timeVal = usTime.getHours() * 100 + usTime.getMinutes();
+                isOpen = (day >= 1 && day <= 5 && timeVal >= 930 && timeVal <= 1600);
+            }
+            return { isOpen: isOpen, text: isOpen ? '交易中' : '市場已收盤', dotClass: isOpen ? 'active' : 'closed' };
+        }
+
+        async function fetchIndexData(symbol, isTW) {
+            try {
+                const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=3mo&interval=1d`;
+                const data = await fetchWithProxyRace(url);
+                if (data && data.chart && data.chart.result) {
+                    const result = data.chart.result[0];
+                    const closes = result.indicators.quote[0].close;
+                    const timestamps = result.timestamp;
+                    
+                    let validCloses = [], validDates = [];
+                    for(let i=0; i<closes.length; i++) {
+                        if(closes[i] !== null) {
+                            validCloses.push(closes[i]);
+                            const d = new Date(timestamps[i] * 1000);
+                            validDates.push(`${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`);
+                        }
+                    }
+                    if (validCloses.length >= 20) return { closes: validCloses, dates: validDates };
+                }
+            } catch (e) {}
+
+            if (isTW) {
+                try {
+                    const d = new Date(); d.setMonth(d.getMonth() - 3);
+                    const startStr = d.toISOString().split('T')[0];
+                    const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=TAIEX&start_date=${startStr}`;
+                    const data = await fetchWithProxyRace(url);
+                    if (data && data.msg === 'success' && data.data) {
+                        const closes = data.data.map(item => item.close);
+                        const dates = data.data.map(item => item.date.replace(/-/g, '/'));
+                        return { closes, dates };
+                    }
+                } catch(e) {}
+            }
+            return null;
+        }
+
+        async function fetchMarketIndex(isTW) {
+            const symbol = isTW ? '^TWII' : '^GSPC';
+            const name = isTW ? '加權指數' : 'S&P 500';
+            
+            DOM.marketIndexVal.innerHTML = `讀取中...`;
+            DOM.marketIndexVal.className = 'text-muted';
+            DOM.fearGreedMeter.style.display = 'none'; 
+            DOM.marketRegimeBadge.style.display = 'none';
+            
+            const indexData = await fetchIndexData(symbol, isTW);
+            const status = getMarketStatus(isTW ? 'tw' : 'us');
+            
+            if (indexData && indexData.closes.length >= 20) {
+                const closes = indexData.closes;
+                const dates = indexData.dates;
+                const price = closes[closes.length - 1]; 
+                const prev = closes[closes.length - 2];
+                const change = price - prev; 
+                const changePercent = (change / prev) * 100;
+                const dataDate = dates[dates.length - 1];
+                
+                let sum20 = 0; for (let i = closes.length - 20; i < closes.length; i++) sum20 += closes[i];
+                const ma20 = sum20 / 20;
+                
+                let gains = 0, losses = 0;
+                for (let i = closes.length - 14; i < closes.length; i++) {
+                    let diff = closes[i] - closes[i - 1];
+                    if (diff >= 0) gains += diff; else losses -= diff;
+                }
+                const avgLoss = losses / 14;
+                let rsi = 100; if (avgLoss !== 0) { rsi = 100 - (100 / (1 + ((gains/14) / avgLoss))); }
+
+                AppState.marketRegime.isBull = (price >= ma20 && rsi >= 40);
+                
+                const color = change > 0 ? 'text-up' : (change < 0 ? 'text-down' : '');
+                const sign = change > 0 ? '+' : '';
+                const arrow = change > 0 ? '▲' : (change < 0 ? '▼' : '-');
+                
+                DOM.marketDate.innerHTML = `📅 ${dataDate}`;
+                DOM.marketIndexVal.className = color;
+                DOM.marketIndexVal.innerHTML = `${price.toFixed(2)} ${arrow} ${sign}${change.toFixed(2)} (${sign}${changePercent.toFixed(2)}%)`;
+                document.getElementById('marketOpenStatus').innerHTML = `<span class="status-dot ${status.dotClass}"></span> <span style="font-family:'Noto Sans TC';">${status.text}</span>`;
+
+                DOM.fearGreedMeter.style.display = 'flex';
+                DOM.meterIndicator.style.left = `${rsi}%`;
+                if(rsi > 75) { DOM.meterText.innerText = "極度貪婪 (風險高)"; DOM.meterText.style.color = "var(--trade-up-buy)"; }
+                else if(rsi > 55) { DOM.meterText.innerText = "貪婪偏多"; DOM.meterText.style.color = "var(--trade-up-buy)"; }
+                else if(rsi < 25) { DOM.meterText.innerText = "極度恐慌 (醞釀反彈)"; DOM.meterText.style.color = "var(--trade-down-sell)"; }
+                else if(rsi < 45) { DOM.meterText.innerText = "恐慌偏空"; DOM.meterText.style.color = "var(--trade-down-sell)"; }
+                else { DOM.meterText.innerText = "中性震盪"; DOM.meterText.style.color = "var(--text-secondary)"; }
+
+                DOM.marketRegimeBadge.style.display = 'inline-block';
+                if(AppState.marketRegime.isBull) {
+                    DOM.marketRegimeBadge.className = 'regime-badge regime-bull';
+                    DOM.marketRegimeBadge.innerHTML = '大盤濾網：偏多';
+                } else {
+                    DOM.marketRegimeBadge.className = 'regime-badge regime-bear';
+                    DOM.marketRegimeBadge.innerHTML = '⚠️ 濾網觸發：弱勢 (封鎖積極買進)';
+                }
+
+            } else { 
+                DOM.marketIndexVal.className = 'text-down';
+                DOM.marketIndexVal.innerHTML = '連線失敗';
+                document.getElementById('marketOpenStatus').innerHTML = `<span class="status-dot closed"></span> <span style="font-family:'Noto Sans TC';">無法連線</span>`;
+                DOM.fearGreedMeter.style.display = 'none';
+                DOM.marketRegimeBadge.style.display = 'none';
+            }
+        }
+
+        // ================= 掃描核心觸發 =================
+        DOM.btnScan.addEventListener('click', async () => {
+            const checkedInputs = document.querySelectorAll('.filter-chip input[type="checkbox"]:checked');
+            const selectedFilters = Array.from(checkedInputs).map(cb => cb.value);
+            const filterNames = Array.from(checkedInputs).map(cb => cb.nextElementSibling.querySelector('.chip-label').innerText.split(' ')[0]); 
+
+            if (selectedFilters.length === 0 && AppState.customStocks.length === 0) {
+                return alert("請至少勾選一個篩選條件，或新增自選股票。"); 
+            }
+
+            DOM.btnScan.innerHTML = '🔄 掃描中...'; DOM.btnScan.disabled = true; AppState.isConnecting = true;
+            
+            const isTW = AppState.market === 'tw';
+            
+            if(isTW && Object.keys(AppState.institutionalData).length === 0) {
+                DOM.scanConnStatus.innerHTML = `<span class="conn-indicator conn-loading"></span> 載入 TWSE 官方全市場籌碼中...`;
+                await fetchInstitutionalData();
+            }
+
+            DOM.scanConnStatus.innerHTML = `<span class="conn-indicator conn-loading"></span> 初始化分析引擎...`;
+
+            const baseList = isTW ? defaultTwStocks : defaultUsStocks;
+            const targetSymbols = [...new Set([...AppState.customStocks, ...baseList])]; 
+
+            try {
+                const validData = await chunkedFetch(targetSymbols, isTW, 15); 
+                
+                let results = [];
+                if (selectedFilters.length > 0) results = validData.filter(stock => selectedFilters.every(f => stock.filters.includes(f)));
+                else results = validData.filter(stock => AppState.customStocks.includes(stock.id));
+
+                AppState.lastScanResults = results;
+                DOM.scanConnStatus.innerHTML = `<span class="conn-indicator conn-success"></span> 成功分析 ${validData.length} 檔標的`;
+                
+                const conditionText = filterNames.length > 0 ? filterNames.join(' + ') : '自選股';
+                const sortedByChange = [...results].sort((a, b) => b.change - a.change);
+                const top5 = sortedByChange.slice(0, 5).map(s => s.name).join('、');
+                
+                saveToHistory(validData.length, results.length, top5, conditionText);
+                renderSummary(validData.length, results, filterNames);
+                renderTable(results);
+            } catch (err) {
+                console.error(err);
+                DOM.scanConnStatus.innerHTML = `<span class="conn-indicator conn-failed"></span> 分析中斷，請重試`;
+            }
+
+            AppState.isConnecting = false; DOM.btnScan.innerHTML = '🔍 開始篩選'; DOM.btnScan.disabled = false;
+            setTimeout(() => { if(!AppState.isConnecting) DOM.scanConnStatus.innerHTML = ''; }, 5000);
+        });
+
+        // 產生 AI 白話文診斷並開啟 Modal
+        window.showAiDiag = function(target) {
+            let stock;
+            if(typeof target === 'string') { stock = AppState.lastScanResults.find(s => s.id === target); } 
+            else { stock = target; }
+            if(!stock) return;
+
+            if (aiChartInstance) aiChartInstance.destroy();
+            const ctx = document.getElementById('aiChartCanvas').getContext('2d');
+            const textColor = AppState.theme === 'dark' ? '#CBD5E1' : '#666666';
+            const gridColor = AppState.theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+
+            aiChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: stock.history.dates,
+                    datasets: [
+                        { label: '收盤價', data: stock.history.closes, borderColor: '#4A90E2', backgroundColor: 'rgba(74, 144, 226, 0.1)', fill: true, tension: 0.1, pointRadius: 0, borderWidth: 2, order: 3 },
+                        { label: 'MA5 (周線)', data: stock.history.ma5, borderColor: '#F59E0B', tension: 0.1, pointRadius: 0, borderWidth: 1.5, borderDash: [4, 4], order: 2 },
+                        { label: 'MA20 (月線)', data: stock.history.ma20, borderColor: '#10B981', tension: 0.1, pointRadius: 0, borderWidth: 1.5, order: 1 },
+                        { label: '壓力線(近20日高)', data: Array(stock.history.dates.length).fill(stock.recentHigh20), borderColor: 'rgba(239, 68, 68, 0.6)', tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [5, 5], order: 4 },
+                        { label: '支撐線(近20日低)', data: Array(stock.history.dates.length).fill(stock.recentLow20), borderColor: 'rgba(16, 185, 129, 0.6)', tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [5, 5], order: 5 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { labels: { color: textColor, font: {size: 11} } } },
+                    scales: {
+                        x: { grid: { color: gridColor }, ticks: { color: textColor, maxTicksLimit: 8 } },
+                        y: { grid: { color: gridColor }, ticks: { color: textColor } }
+                    }
+                }
+            });
+
+            // 0. 更新健康度評分 Badge
+            let scoreColor = '#EF4444'; let scoreLabel = '弱勢危險';
+            if (stock.healthScore >= 80) { scoreColor = '#10B981'; scoreLabel = '體質優良'; }
+            else if (stock.healthScore >= 50) { scoreColor = '#F59E0B'; scoreLabel = '震盪盤整'; }
+            
+            document.getElementById('aiDiagScoreBadge').innerHTML = `
+                <span style="background-color: ${scoreColor}; color: white; padding: 4px 12px; border-radius: 16px; font-weight: bold; font-size: 14px; display: inline-flex; align-items: center; gap: 4px;">
+                    <span>綜合評分：${stock.healthScore}分</span>
+                    <span style="font-weight: normal; font-size: 12px; opacity: 0.9;">(${scoreLabel})</span>
+                </span>
+            `;
+
+            // 1. 持有者與進場者專屬建議
+            let holderText = ""; let buyerText = "";
+            if (stock.price > stock.ma20) {
+                if (stock.rsi > 70) {
+                    holderText = "股價短線漲幅已大，進入超買區，追價風險較高。建議可逢高分批獲利了結，或將停利點設於 MA5 周線，跌破即出場以保住利潤。";
+                    buyerText = "目前短線乖離率過大，此時進場容易被套牢或面臨回檔洗盤。建議耐心等待量縮回測均線（如 MA5 或 MA20）有守時，再考慮佈局。";
+                } else {
+                    holderText = "目前價格穩居月線 (MA20) 之上，趨勢偏多，持股續抱即可。若不想承受過大回檔風險，可參考系統計算的「停利目標1」分批出場。";
+                    buyerText = "目前技術面維持多頭格局，且大盤未明顯轉弱。建議可於今日收盤前或明日開盤逢低佈局，並將防守點設定在建議停損價或月線下方。";
+                }
+            } else {
+                if (stock.rsi < 30) {
+                    holderText = "股價跌深進入超賣區，短線隨時可能出現技術性反彈。目前不建議盲目殺低，可等待反彈至月線附近再行減碼。";
+                    buyerText = "屬於左側摸底策略！股價乖離過大醞釀反彈，極短線投資人可少量試單搶反彈，但務必嚴格設定停損（跌破前低即走），因為長線趨勢仍偏弱。";
+                } else {
+                    holderText = "趨勢已經走弱，上方均線形成蓋頭反壓。如果已經跌破您的停損點，建議嚴格執行停損，保留資金實力，切勿攤平。";
+                    buyerText = "目前為空方控盤，接刀風險極高！請務必管好手，暫時觀望，或尋找其他站上月線的強勢標的。";
+                }
+            }
+
+            // 2. 基本技術面判定與支撐壓力分析
+            let techText = "走勢震盪，技術指標多空分歧，建議等待更明確的突破訊號。";
+            if (stock.filters.includes('buySignal') || stock.healthScore >= 70) {
+                techText = "【多頭格局】該股目前已強勢站上月線(MA20)支撐，且綜合健康度表現優異，趨勢翻多。";
+            } else if (stock.filters.includes('sellSignal') || stock.healthScore < 40) {
+                techText = "【空頭格局】股價已跌破月線，動能疲弱且健康度偏低，屬於空方控盤。建議避開。";
+            } else if (stock.filters.includes('aboveMA20')) {
+                techText = "【震盪偏多】股價在月線之上，但綜合動能尚未完全爆發。建議等待補量或指標進一步轉強。";
+            }
+            
+            // 加入籌碼判定輔助
+            if(stock.hasForeignSupport || stock.hasTrustSupport) {
+                techText += ` <span style="color:var(--trade-up-buy); font-weight:bold;">(🔥 籌碼加分：最新資料顯示法人買超護航)</span>`;
+            }
+
+            const distRes = stock.recentHigh20 > stock.price ? ((stock.recentHigh20 - stock.price) / stock.price * 100).toFixed(1) : 0;
+            const distSup = stock.price > stock.recentLow20 ? ((stock.price - stock.recentLow20) / stock.price * 100).toFixed(1) : 0;
+            techText += `<br><br><span style="color:var(--primary-color);">📌 <strong>區間分析：</strong></span> 目前距離上方近20日壓力線 (${stock.recentHigh20.toFixed(2)}) 還有約 <strong>${distRes}%</strong> 空間，距離下方支撐線 (${stock.recentLow20.toFixed(2)}) 還有約 <strong>${distSup}%</strong> 空間。進場前請評估此盈虧比是否划算。`;
+
+            // 3. K線型態
+            let klineText = "近期 K 線呈現一般震盪，無明顯極端型態。";
+            let klineTags = [];
+            if (stock.kline.isGapUp) klineTags.push("向上跳空缺口 (大資金強籌，強勢表現)");
+            if (stock.kline.isGapDown) klineTags.push("向下跳空缺口 (賣壓沉重，防禦為主)");
+            if (stock.kline.isBigYang) klineTags.push("大陽線 (買方力道極強)");
+            if (stock.kline.isBigYin) klineTags.push("大陰線 (賣方力道極強)");
+            if (stock.kline.hasLongUpper) klineTags.push("長上影線 (衝高回落，上方有明顯賣壓)");
+            if (stock.kline.hasLongLower) klineTags.push("長下影線 (跌深反彈，下方具備支撐)");
+
+            if (stock.kline.isGapUp && stock.kline.isBigYang && stock.volRatio >= 1.5) {
+                klineText = "🔥🔥🔥【極強烈訊號】大漲四訊號齊發 (大陽線 + 缺口 + 倍量)！主升浪極可能即將啟動，主力強勢吃貨中！";
+            } else if (klineTags.length > 0) {
+                klineText = "最新日K偵測到以下關鍵特徵：<br>• " + klineTags.join("<br>• ");
+            }
+
+            // 4. 量價關係
+            let vpText = "目前量價關係處於合理的中性水準。";
+            if (stock.change > 0 && stock.volRatio > 1.2) {
+                vpText = "【出量上漲必回檔】今日帶量上漲，動能強勁，但短線可能遭遇獲利了結賣壓，請留意追高風險。";
+            } else if (stock.change < 0 && stock.volRatio > 1.2) {
+                vpText = "【出量下跌必反彈】今日爆量下跌，恐慌賣壓湧現，但也暗示可能有主力在低檔承接吸籌。";
+            } else if (stock.change > 0 && stock.volRatio < 1) {
+                vpText = "【縮量上漲繼續漲】今日量縮上漲，代表籌碼安定，上檔拋壓輕，有望延續漲勢。";
+            } else if (stock.change < 0 && stock.volRatio < 1) {
+                vpText = "【縮量下跌繼續跌】今日量縮下跌，市場承接意願低迷，底部尚未浮現，請勿輕易摸底。";
+            }
+
+            document.getElementById('aiDiagTitle').innerText = `🤖 診斷報告：${stock.name} (${stock.id})`;
+            document.getElementById('aiDiagHolder').innerHTML = holderText;
+            document.getElementById('aiDiagBuyer').innerHTML = buyerText;
+            document.getElementById('aiDiagTech').innerHTML = techText;
+            document.getElementById('aiDiagKline').innerHTML = klineText;
+            document.getElementById('aiDiagVP').innerHTML = vpText;
+
+            openModal('aiDiagModal');
+        }
+
+        // ================= 其他渲染與輔助功能 =================
+        function saveToHistory(total, matchCount, top, filters) {
+            try {
+                let history = JSON.parse(localStorage.getItem('traderHistory') || '[]');
+                const now = new Date().toLocaleString('zh-TW', { hour12: false, month: '2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+                history.unshift({ time: now, market: AppState.market === 'tw' ? '🇹🇼 台股' : '🇺🇸 美股', filters: filters, matchCount: matchCount, total: total, top: top });
+                if(history.length > 50) history.pop(); 
+                localStorage.setItem('traderHistory', JSON.stringify(history));
+            } catch(e) { console.error("History save error:", e); }
+        }
+
+        function renderSummary(totalCount, results, filterNames) {
+            if(results.length === 0) {
+                DOM.summaryBox.innerHTML = `<div class="summary-content">本次分析 ${totalCount} 支股票，<strong>無符合條件之標的</strong>。<br>條件越嚴格 (AND邏輯)，符合標的越少，請嘗試放寬篩選條件。</div>`; return;
+            }
+
+            const sortedByChange = [...results].sort((a, b) => b.change - a.change);
+            const topGainer = sortedByChange[0]; const topLoser = sortedByChange[sortedByChange.length - 1];
+            const top5 = sortedByChange.slice(0, 5).map(s => `${s.name}(${s.id})`).join('、');
+            const marketName = AppState.market === 'tw' ? '台股' : '美股';
+            const analyzeTimeStr = new Date().toLocaleString('zh-TW', { hour12: false, month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+            
+            let conditionText = filterNames.length > 0 ? filterNames.join(' + ') : '自選股清單';
+            
+            const gainerColorClass = topGainer.change > 0 ? 'text-up' : (topGainer.change < 0 ? 'text-down' : '');
+            const loserColorClass = topLoser.change > 0 ? 'text-up' : (topLoser.change < 0 ? 'text-down' : '');
+
+            DOM.summaryBox.innerHTML = `
+                <div class="summary-content" style="width: 100%;">
+                    <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                        <h4 style="color: var(--text-main); font-size: 16px; margin:0;">📄 ${marketName}篩選摘要</h4>
+                    </div>
+                    <div style="margin-bottom: 12px; font-family: 'JetBrains Mono'; font-size: 13px; color: var(--primary-color);">
+                        📊 資料收盤日期：${AppState.lastDataDate || '最新'} | ⏱️ 產出時間：${analyzeTimeStr}
+                    </div>
+                    <div>嚴格比對條件：<strong>${conditionText}</strong></div>
+                    <div style="margin-bottom: 16px;">自母體 ${totalCount} 支中，篩選出 <strong>${results.length}</strong> 支完全符合</div>
+                    <div>強勢代號：${top5}</div>
+                    <div>表現最佳：<span class="${gainerColorClass}">${topGainer.name} ${topGainer.change > 0 ? '+' : ''}${topGainer.change.toFixed(2)}%</span></div>
+                    <div>表現最弱：<span class="${loserColorClass}">${topLoser.name} ${topLoser.change > 0 ? '+' : ''}${topLoser.change.toFixed(2)}%</span></div>
+                </div>
+            `;
+        }
+
+        function renderTable(data) {
+            DOM.resultCard.style.display = 'block'; DOM.resultBody.innerHTML = '';
+            
+            data.forEach(stock => {
+                const colorClass = (stock.change === 0) ? '' : (stock.change > 0 ? 'text-up' : 'text-down');
+                const sign = stock.change > 0 ? '+' : '';
+                const tp1 = (stock.price * 1.05).toFixed(2); const tp2 = (stock.price * 1.10).toFixed(2); const sl = (stock.price * 0.95).toFixed(2);
+                
+                let dotColor = "var(--text-secondary)";
+                if (stock.actionType === "strong_buy") dotColor = "var(--trade-up-buy)";
+                else if (stock.actionType === "buy") dotColor = "var(--trade-up-buy)";
+                else if (stock.actionType === "strong_sell") dotColor = "var(--trade-down-sell)";
+                else if (stock.actionType === "sell") dotColor = "var(--trade-down-sell)";
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight:700;">${stock.id}</td><td>${stock.name}</td>
+                    <td class="font-mono">${stock.price.toFixed(2)}</td><td class="font-mono ${colorClass}">${sign}${stock.change.toFixed(2)}%</td>
+                    <td class="font-mono text-up">${tp1}</td><td class="font-mono text-up">${tp2}</td><td class="font-mono text-down">${sl}</td>
+                    <td style="font-weight:700; color:${dotColor};">
+                        ${stock.actionSuggestion} <span style="font-size:12px;">●</span><br>
+                        <button class="btn-diag" onclick="showAiDiag('${stock.id}')">AI 診斷</button>
+                    </td>
+                `;
+                DOM.resultBody.appendChild(tr);
+            });
+        }
+
+        window.openRankingModal = function() {
+            if(AppState.lastScanResults.length === 0) return alert("請先執行篩選，系統才能產生排行榜！");
+            sortRanking('rsi-asc'); openModal('rankModal');
+        }
+
+        window.sortRanking = function(type) {
+            let sorted = [...AppState.lastScanResults];
+            let valKey = ""; let valFormat = (v) => v.toFixed(2);
+            
+            if(type === 'rsi-asc') { sorted.sort((a,b) => a.rsi - b.rsi); valKey = "rsi"; }
+            else if(type === 'rsi-desc') { sorted.sort((a,b) => b.rsi - a.rsi); valKey = "rsi"; }
+            else if(type === 'vol-desc') { sorted.sort((a,b) => b.volRatio - a.volRatio); valKey = "volRatio"; valFormat = (v) => v.toFixed(2) + 'x'; }
+            else if(type === 'ibs-asc') { sorted.sort((a,b) => a.ibs - b.ibs); valKey = "ibs"; }
+            else if(type === 'ibs-desc') { sorted.sort((a,b) => b.ibs - a.ibs); valKey = "ibs"; }
+
+            const tbody = document.getElementById('rankTableBody'); tbody.innerHTML = '';
+            const signalMap = { "strong_buy": "強勢", "buy": "偏多", "neutral": "中性", "sell": "偏空", "strong_sell": "弱勢" };
+
+            sorted.slice(0, 10).forEach((stock, i) => {
+                let dotColor = stock.actionType.includes("buy") ? "var(--trade-up-buy)" : (stock.actionType.includes("sell") ? "var(--trade-down-sell)" : "var(--text-secondary)");
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${i+1}</td><td style="font-weight:600;">${stock.name}(${stock.id})</td>
+                    <td class="font-mono">${stock.price.toFixed(2)}</td>
+                    <td class="font-mono ${stock.change>0?'text-up':(stock.change<0?'text-down':'')}">${stock.change>0?'+':''}${stock.change.toFixed(2)}%</td>
+                    <td class="font-mono" style="font-weight:bold; color:var(--primary-color)">${valFormat(stock[valKey])}</td>
+                    <td style="color:${dotColor}; font-weight:bold;">${signalMap[stock.actionType]} <span style="font-size:12px;">●</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        window.openHistoryModal = function() {
+            try {
+                let history = JSON.parse(localStorage.getItem('traderHistory') || '[]');
+                const tbody = document.getElementById('historyTableBody');
+                if(history.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:32px; color:var(--text-muted);">尚無篩選紀錄</td></tr>';
+                } else {
+                    tbody.innerHTML = history.map(h => `
+                        <tr>
+                            <td style="color:var(--text-secondary);">${h.time}</td>
+                            <td>${h.market}</td><td>${h.filters}</td>
+                            <td style="font-weight:bold;">${h.matchCount} / ${h.total}</td>
+                            <td style="font-size:13px;">${h.top || '-'}</td>
+                        </tr>
+                    `).join('');
+                }
+                openModal('historyModal');
+            } catch(e) {}
+        }
+
+        window.clearHistory = function() {
+            if(confirm("確定要清除所有歷史紀錄嗎？")) { localStorage.removeItem('traderHistory'); openHistoryModal(); }
+        }
+
+        window.openHeatmapModal = function() {
+            if(AppState.lastScanResults.length === 0) return alert("請先執行篩選，系統才能產生熱力圖！");
+            const container = document.getElementById('heatmapContainer');
+            container.innerHTML = '';
+            
+            const mapData = [...AppState.lastScanResults].sort((a,b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 60);
+
+            mapData.forEach(stock => {
+                const el = document.createElement('div');
+                let bgClass = "neutral";
+                if(stock.change > 3) bgClass = "up-strong";
+                else if(stock.change > 0) bgClass = "up-light";
+                else if(stock.change < -3) bgClass = "down-strong";
+                else if(stock.change < 0) bgClass = "down-light";
+                
+                el.className = `heatmap-item ${bgClass}`;
+                const height = 60 + Math.min(Math.abs(stock.change) * 10, 80);
+                el.style.height = `${height}px`;
+
+                el.innerHTML = `<div class="heatmap-symbol">${stock.name}</div><div class="heatmap-change">${stock.change > 0?'+':''}${stock.change.toFixed(2)}%</div>`;
+                container.appendChild(el);
+            });
+            openModal('heatmapModal');
+        }
+
+        window.openModal = function(id) { document.getElementById(id).classList.add('active'); }
+        window.closeModal = function(id) { document.getElementById(id).classList.remove('active'); }
+        document.querySelectorAll('.modal-overlay').forEach(ov => { ov.addEventListener('click', (e) => { if(e.target === ov) ov.classList.remove('active'); }); });
+
+        document.addEventListener('DOMContentLoaded', () => { 
+            updateThemeUI(); initBookmarks(); fetchMarketIndex(true); 
+        });
+
+    </script>
+</body>
+</html>
