@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>股票分析系統 — 你的投資策略 AI 幫手 v0.3.10</title>
+    <title>股票分析系統 — 你的投資策略 AI 幫手 v0.3.11</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>H</text></svg>">
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -175,14 +175,15 @@
 
         /* ================= 響應式設計優化 (Mobile) ================= */
         @media (max-width: 992px) {
+            .header { position: relative; } /* 解除手機版置頂鎖定，釋放螢幕空間 */
             .header-inner { flex-wrap: wrap; padding: 12px var(--space-md); }
-            .header-center { order: 3; flex: 0 0 100%; margin-left: 0 !important; margin-top: 16px; align-items: center !important; }
+            .header-center { order: 3; flex: 0 0 100%; margin-left: 0 !important; margin-top: 12px; align-items: center !important; }
             .header-right { margin-left: auto; }
             
-            .market-status-box { flex-wrap: wrap; justify-content: center; padding: 8px; text-align: center; height: auto; line-height: 2; width: 100%; }
-            .market-status-box > span { border-left: none !important; border-right: none !important; padding: 0 6px !important; display: inline-block; white-space: nowrap; }
+            .market-status-box { flex-wrap: wrap; justify-content: center; padding: 6px; text-align: center; height: auto; line-height: 1.6; width: 100%; font-size: 13px; }
+            .market-status-box > span { border-left: none !important; border-right: none !important; padding: 0 4px !important; display: inline-block; white-space: nowrap; }
             
-            .header-center > div:nth-child(2) { flex-wrap: wrap; justify-content: center; margin-left: 0 !important; gap: 12px !important; margin-top: 8px; width: 100%; }
+            .header-center > div:nth-child(2) { flex-wrap: wrap; justify-content: center; margin-left: 0 !important; gap: 8px !important; margin-top: 8px; width: 100%; }
             
             .quick-check-container { flex-direction: column !important; align-items: flex-start !important; }
             .quick-check-wrapper { width: 100%; min-width: 100% !important; flex-wrap: wrap; }
@@ -219,7 +220,7 @@
             <div class="header-left">
                 <div class="logo-box">H</div>
                 <div class="logo-text">
-                    <div class="logo-title">股票分析系統 <span class="version-badge">v0.3.10</span></div>
+                    <div class="logo-title">股票分析系統 <span class="version-badge">v0.3.11</span></div>
                     <div class="logo-subtitle">你的投資策略 AI 幫手</div>
                 </div>
             </div>
@@ -671,7 +672,7 @@
     </div>
 
     <footer class="footer">
-        <div>v0.3.10 | &copy;2026 <a href="https://huobest.com/" target="_blank">霍家私塾</a></div>
+        <div>v0.3.11 | &copy;2026 <a href="https://huobest.com/" target="_blank">霍家私塾</a></div>
         <div style="margin-top: 8px;">⚠️ 本平台僅供模擬交易學習用途，不構成任何投資建議。投資有風險，請自行評估。</div>
     </footer>
 
